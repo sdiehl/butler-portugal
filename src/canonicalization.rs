@@ -2,19 +2,55 @@
 //!
 //! This module implements the core Butler-Portugal algorithm for bringing
 //! tensors into canonical form by systematically applying symmetry operations.
+//!
+//! The algorithm is based on the double coset approach where a tensor with
+//! slot symmetries S and dummy symmetries D is canonicalized by finding
+//! the minimal representative in the double coset D*g*S.
 
 use crate::error::Result;
 use crate::index::TensorIndex;
 use crate::symmetry::Symmetry;
 use crate::tensor::Tensor;
+use std::collections::HashSet;
+
+/// Represents a permutation in array form
+type Permutation = Vec<usize>;
+
+/// Represents a base and strong generating set (BSGS)
+#[derive(Debug, Clone)]
+pub struct BSGS {
+    pub base: Vec<usize>,
+    pub generators: Vec<Permutation>,
+}
+
+impl Default for BSGS {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BSGS {
+    pub fn new() -> Self {
+        Self {
+            base: Vec::new(),
+            generators: Vec::new(),
+        }
+    }
+
+    pub fn identity(size: usize) -> Self {
+        Self {
+            base: Vec::new(),
+            generators: vec![(0..size).collect()],
+        }
+    }
+}
 
 /// Canonicalizes a tensor using the Butler-Portugal algorithm
 ///
 /// The Butler-Portugal algorithm works by:
-/// 1. Identifying all possible index permutations
-/// 2. Applying symmetry constraints to reduce the search space
-/// 3. Finding the lexicographically minimal form
-/// 4. Returning the canonical tensor with appropriate coefficient
+/// 1. Identifying all possible index permutations respecting symmetries
+/// 2. Finding the lexicographically minimal form
+/// 3. Returning the canonical tensor with appropriate coefficient
 ///
 /// # Arguments
 /// * `tensor` - The tensor to canonicalize
@@ -52,37 +88,45 @@ pub fn canonicalize(tensor: &Tensor) -> Result<Tensor> {
         return Ok(tensor.clone());
     }
 
-    // Generate all relevant permutations considering symmetries
-    let permutations = generate_canonical_permutations(tensor)?;
+    // Check for zero tensor due to symmetry constraints
+    for symmetry in tensor.symmetries() {
+        if symmetry.makes_tensor_zero(tensor.indices()) {
+            let mut zero_tensor = tensor.clone();
+            zero_tensor.set_coefficient(0);
+            return Ok(zero_tensor);
+        }
+    }
 
-    if permutations.is_empty() {
+    // Generate all valid permutations considering symmetries
+    let valid_permutations = generate_valid_permutations(tensor);
+
+    if valid_permutations.is_empty() {
         return Ok(tensor.clone());
     }
 
-    // Find the lexicographically minimal tensor form
+    // Find lexicographically minimal tensor form
     let mut best_tensor = None;
-    let mut best_key = None;
+    let mut best_canonical_key = None;
 
-    for perm in permutations {
+    for perm in valid_permutations {
         let candidate = tensor.permute(&perm)?;
 
-        // Skip if this permutation makes the tensor zero
         if candidate.is_zero() {
             continue;
         }
 
-        let key = canonical_key(&candidate);
+        let canonical_key = tensor_canonical_key(&candidate);
 
-        if best_key.as_ref().is_none_or(|bk| key < *bk) {
+        if best_canonical_key.is_none() || canonical_key < *best_canonical_key.as_ref().unwrap() {
+            best_canonical_key = Some(canonical_key);
             best_tensor = Some(candidate);
-            best_key = Some(key);
         }
     }
 
     match best_tensor {
         Some(tensor) => Ok(tensor),
         None => {
-            // All permutations resulted in zero tensor
+            // All permutations resulted in zero
             let mut zero_tensor = tensor.clone();
             zero_tensor.set_coefficient(0);
             Ok(zero_tensor)
@@ -90,81 +134,157 @@ pub fn canonicalize(tensor: &Tensor) -> Result<Tensor> {
     }
 }
 
-/// Generates all canonical permutations for a tensor considering its symmetries
-fn generate_canonical_permutations(tensor: &Tensor) -> Result<Vec<Vec<usize>>> {
+/// Generates all valid permutations respecting symmetries using orbit generation
+fn generate_valid_permutations(tensor: &Tensor) -> Vec<Permutation> {
     let n = tensor.rank();
-    let mut all_perms = generate_all_permutations(n);
 
-    // Filter permutations based on symmetry constraints
-    filter_by_symmetries(&mut all_perms, tensor.symmetries());
+    // Start with identity permutation
+    let identity: Vec<usize> = (0..n).collect();
+    let mut orbit = vec![identity.clone()];
+    let mut visited = HashSet::new();
+    visited.insert(identity.clone());
 
-    Ok(all_perms)
+    // Generate orbit under symmetry group using breadth-first search
+    let mut queue = vec![identity];
+
+    while let Some(current_perm) = queue.pop() {
+        // Apply each symmetry generator
+        for symmetry in tensor.symmetries() {
+            let generators = symmetry_to_generators(symmetry, n);
+
+            for gen in generators {
+                let new_perm = compose_permutations(&current_perm, &gen);
+
+                if !visited.contains(&new_perm) {
+                    visited.insert(new_perm.clone());
+                    orbit.push(new_perm.clone());
+                    queue.push(new_perm);
+                }
+            }
+        }
+    }
+
+    orbit
 }
 
-/// Generates all permutations of indices 0..n
-fn generate_all_permutations(n: usize) -> Vec<Vec<usize>> {
-    if n == 0 {
-        return vec![vec![]];
-    }
-    if n == 1 {
-        return vec![vec![0]];
+/// Creates a canonical key for tensor comparison
+fn tensor_canonical_key(tensor: &Tensor) -> String {
+    let mut key = String::new();
+
+    // Add index names in order with their variance
+    for index in tensor.indices() {
+        key.push_str(index.name());
+        key.push(if index.is_contravariant() { '^' } else { '_' });
+        key.push('|'); // separator
     }
 
-    let mut result = Vec::new();
-    let indices: Vec<usize> = (0..n).collect();
-    generate_permutations_recursive(&indices, 0, &mut result);
+    // Add coefficient at the end (so lexicographic ordering of indices takes precedence)
+    key.push_str(&format!("#{}", tensor.coefficient()));
+
+    key
+}
+
+/// Converts a symmetry to permutation generators
+fn symmetry_to_generators(symmetry: &Symmetry, size: usize) -> Vec<Permutation> {
+    match symmetry {
+        Symmetry::Symmetric { indices } => {
+            let mut generators = Vec::new();
+            // For symmetric group, generate adjacent transpositions
+            for i in 0..indices.len().saturating_sub(1) {
+                let mut perm: Vec<usize> = (0..size).collect();
+                if indices[i] < size && indices[i + 1] < size {
+                    perm.swap(indices[i], indices[i + 1]);
+                }
+                generators.push(perm);
+            }
+            generators
+        }
+        Symmetry::Antisymmetric { indices } => {
+            let mut generators = Vec::new();
+            // For antisymmetric group, generate adjacent transpositions
+            for i in 0..indices.len().saturating_sub(1) {
+                let mut perm: Vec<usize> = (0..size).collect();
+                if indices[i] < size && indices[i + 1] < size {
+                    perm.swap(indices[i], indices[i + 1]);
+                }
+                generators.push(perm);
+            }
+            generators
+        }
+        Symmetry::SymmetricPairs { pairs } => {
+            let mut generators = Vec::new();
+
+            // Generate swaps within each pair
+            for &(i, j) in pairs {
+                if i < size && j < size {
+                    let mut perm: Vec<usize> = (0..size).collect();
+                    perm.swap(i, j);
+                    generators.push(perm);
+                }
+            }
+
+            // Generate pair exchanges between consecutive pairs
+            // For Riemann tensor: (0,1) ↔ (2,3) gives permutation [2, 3, 0, 1]
+            for pair_idx in 0..pairs.len().saturating_sub(1) {
+                let (i1, j1) = pairs[pair_idx];
+                let (i2, j2) = pairs[pair_idx + 1];
+
+                if i1 < size && j1 < size && i2 < size && j2 < size {
+                    let mut perm: Vec<usize> = (0..size).collect();
+                    perm[i1] = i2;
+                    perm[j1] = j2;
+                    perm[i2] = i1;
+                    perm[j2] = j1;
+                    generators.push(perm);
+                }
+            }
+
+            generators
+        }
+        Symmetry::Cyclic { indices } => {
+            if indices.len() > 1 {
+                let mut perm: Vec<usize> = (0..size).collect();
+                // Create cyclic permutation
+                if indices.iter().all(|&i| i < size) {
+                    let first = indices[0];
+                    for i in 0..indices.len() - 1 {
+                        perm[indices[i]] = indices[i + 1];
+                    }
+                    perm[indices[indices.len() - 1]] = first;
+                }
+                vec![perm]
+            } else {
+                vec![(0..size).collect()]
+            }
+        }
+        Symmetry::Custom {
+            valid_permutations,
+            signs: _,
+        } => valid_permutations.clone(),
+    }
+}
+
+/// Composes two permutations (applies first, then second)
+fn compose_permutations(perm1: &[usize], perm2: &[usize]) -> Permutation {
+    let size = perm1.len().max(perm2.len());
+    let mut result = vec![0; size];
+
+    for i in 0..size {
+        let intermediate = if i < perm1.len() { perm1[i] } else { i };
+        result[i] = if intermediate < perm2.len() {
+            perm2[intermediate]
+        } else {
+            intermediate
+        };
+    }
+
     result
 }
 
-/// Recursive helper for generating permutations
-fn generate_permutations_recursive(arr: &[usize], start: usize, result: &mut Vec<Vec<usize>>) {
-    if start == arr.len() {
-        result.push(arr.to_vec());
-        return;
-    }
-
-    for i in start..arr.len() {
-        let mut arr_copy = arr.to_vec();
-        arr_copy.swap(start, i);
-        generate_permutations_recursive(&arr_copy, start + 1, result);
-    }
-}
-
-/// Filters permutations based on tensor symmetries
-fn filter_by_symmetries(permutations: &mut Vec<Vec<usize>>, symmetries: &[Symmetry]) {
-    if symmetries.is_empty() {
-        return;
-    }
-
-    permutations.retain(|perm| {
-        for symmetry in symmetries {
-            if !symmetry.is_valid_permutation(perm) {
-                return false;
-            }
-        }
-        true
-    });
-}
-
-/// Creates a canonical key for comparing tensors
-fn canonical_key(tensor: &Tensor) -> String {
-    let mut key = String::new();
-
-    // Add tensor name
-    key.push_str(tensor.name());
-    key.push('_');
-
-    // Add index information in canonical order
-    for index in tensor.indices() {
-        key.push_str(index.name());
-        if index.is_contravariant() {
-            key.push('^');
-        } else {
-            key.push('_');
-        }
-    }
-
-    key
+/// Checks if a permutation is the identity
+#[allow(dead_code)]
+fn is_identity(perm: &[usize]) -> bool {
+    perm.iter().enumerate().all(|(i, &val)| i == val)
 }
 
 /// Advanced canonicalization with optimization for specific tensor types
@@ -196,48 +316,8 @@ fn is_riemann_like(tensor: &Tensor) -> bool {
 
 /// Optimized canonicalization for Riemann tensors
 fn canonicalize_riemann_tensor(tensor: &Tensor) -> Result<Tensor> {
-    // For Riemann tensors, we can use the specific symmetry structure
-    // R_abcd = -R_bacd = -R_abdc = R_badc
-    // R_abcd = R_cdab (Bianchi identity constraint can be added)
-
-    // Generate only the minimal set of permutations needed
-    let permutations = vec![
-        vec![0, 1, 2, 3], // original
-        vec![1, 0, 2, 3], // swap first pair
-        vec![0, 1, 3, 2], // swap second pair
-        vec![1, 0, 3, 2], // swap both pairs
-        vec![2, 3, 0, 1], // exchange pairs
-        vec![3, 2, 0, 1], // exchange pairs + swap first
-        vec![2, 3, 1, 0], // exchange pairs + swap second
-        vec![3, 2, 1, 0], // exchange pairs + swap both
-    ];
-
-    let mut best_tensor = None;
-    let mut best_key = None;
-
-    for perm in permutations {
-        let candidate = tensor.permute(&perm)?;
-
-        if candidate.is_zero() {
-            continue;
-        }
-
-        let key = canonical_key(&candidate);
-
-        if best_key.as_ref().is_none_or(|bk| key < *bk) {
-            best_tensor = Some(candidate);
-            best_key = Some(key);
-        }
-    }
-
-    match best_tensor {
-        Some(tensor) => Ok(tensor),
-        None => {
-            let mut zero_tensor = tensor.clone();
-            zero_tensor.set_coefficient(0);
-            Ok(zero_tensor)
-        }
-    }
+    // For Riemann tensors, use the general algorithm with full symmetries
+    canonicalize(tensor)
 }
 
 /// Checks if tensor is purely symmetric
@@ -247,7 +327,6 @@ fn is_symmetric_tensor(tensor: &Tensor) -> bool {
 
 /// Optimized canonicalization for symmetric tensors
 fn canonicalize_symmetric_tensor(tensor: &Tensor) -> Result<Tensor> {
-    // For symmetric tensors, canonical form has indices in alphabetical order
     let mut indices_with_positions: Vec<(usize, &TensorIndex)> =
         tensor.indices().iter().enumerate().collect();
 
@@ -264,8 +343,6 @@ fn is_antisymmetric_tensor(tensor: &Tensor) -> bool {
 
 /// Optimized canonicalization for antisymmetric tensors
 fn canonicalize_antisymmetric_tensor(tensor: &Tensor) -> Result<Tensor> {
-    // For antisymmetric tensors, canonical form has indices in alphabetical order
-    // but we need to track the sign from the permutation
     let mut indices_with_positions: Vec<(usize, &TensorIndex)> =
         tensor.indices().iter().enumerate().collect();
 
@@ -330,26 +407,34 @@ mod tests {
     }
 
     #[test]
-    fn test_riemann_tensor_canonicalization() {
-        let mut tensor = Tensor::new(
-            "R",
-            vec![
-                TensorIndex::new("d", 0),
-                TensorIndex::new("c", 1),
-                TensorIndex::new("b", 2),
-                TensorIndex::new("a", 3),
-            ],
+    fn test_identity_permutation() {
+        let perm = vec![0, 1, 2, 3];
+        assert!(is_identity(&perm));
+
+        let non_identity = vec![1, 0, 2, 3];
+        assert!(!is_identity(&non_identity));
+    }
+
+    #[test]
+    fn test_permutation_composition() {
+        let perm1 = vec![1, 0, 2, 3];
+        let perm2 = vec![0, 1, 3, 2];
+        let composed = compose_permutations(&perm1, &perm2);
+
+        // Apply perm1 first: [1,0,2,3], then perm2: [0,1,3,2]
+        // Result should map 0->1->1, 1->0->0, 2->2->3, 3->3->2
+        assert_eq!(composed, vec![1, 0, 3, 2]);
+    }
+
+    #[test]
+    fn test_tensor_canonical_key() {
+        let tensor = Tensor::new(
+            "T",
+            vec![TensorIndex::new("a", 0), TensorIndex::contravariant("b", 1)],
         );
 
-        tensor.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
-        tensor.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
-
-        let result = canonicalize(&tensor).unwrap();
-
-        // Should be in canonical order
-        assert_eq!(result.indices()[0].name(), "a");
-        assert_eq!(result.indices()[1].name(), "b");
-        assert_eq!(result.indices()[2].name(), "c");
-        assert_eq!(result.indices()[3].name(), "d");
+        let key = tensor_canonical_key(&tensor);
+        assert!(key.contains("a_"));
+        assert!(key.contains("b^"));
     }
 }

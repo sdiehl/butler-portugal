@@ -229,26 +229,31 @@ impl Symmetry {
 
     /// Calculates sign for cyclic permutation
     fn cyclic_permutation_sign(&self, permutation: &[usize], indices: &[usize]) -> i32 {
-        // For cyclic symmetry, only cyclic permutations are allowed
-        // Check if the permutation of the cyclic indices is indeed cyclic
+        // For cyclic symmetry, only cyclic permutations of the specified indices are allowed
         let n = indices.len();
         if n <= 1 {
             return 1;
         }
 
-        // Extract the sub-permutation for the cyclic indices
+        // Extract the sub-permutation: for each cyclic index, where does it go?
         let mut sub_perm = vec![0; n];
-        for i in 0..n {
-            if let Some(pos) = permutation.iter().position(|&x| x == indices[i]) {
-                if let Some(idx_pos) = indices.iter().position(|&x| x == permutation[pos]) {
-                    sub_perm[i] = idx_pos;
-                }
+        for (i, &idx_pos) in indices.iter().enumerate() {
+            if idx_pos >= permutation.len() {
+                return 0; // Invalid
+            }
+            let target = permutation[idx_pos];
+
+            // Find where this target appears in the cyclic indices
+            if let Some(target_pos) = indices.iter().position(|&x| x == target) {
+                sub_perm[i] = target_pos;
+            } else {
+                return 0; // Not a permutation within the cyclic group
             }
         }
 
-        // Check if it's a valid cyclic permutation
+        // Check if it's a valid cyclic permutation and return sign +1
+        // Cyclic permutations in our implementation always have sign +1
         if is_cyclic_permutation(&sub_perm) {
-            // Cyclic permutations have sign +1 for even cycles, alternating for odd
             1
         } else {
             0 // Invalid

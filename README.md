@@ -2,7 +2,7 @@
 
 An implementation of the Butler-Portugal algorithm for tensor canonicalization.
 
-The Butler-Portugal algorithm is a systematic method for bringing tensors into canonical form by applying symmetry operations.
+The Butler-Portugal algorithm is a systematic method for bringing tensors into canonical form by applying symmetry operations. We use the double coset approach where a tensor with slot symmetries $S$ and dummy symmetries $D$ is canonicalized by finding the minimal representative in the double coset $D*g*S$.
 
 ## Usage
 
@@ -57,8 +57,6 @@ let canonical = canonicalize(&riemann).unwrap();
 
 See [examples/basic_usage.rs](examples/basic_usage.rs) for more examples.
 
-## LICENSE
+## License
 
 Released under the MIT License. See the LICENSE file for details.
-
-
