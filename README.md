@@ -15,13 +15,20 @@ cargo add butler-portugal
 For example, the Riemann curvature tensor $R_{\mu\nu\rho\sigma}$ satisfies the following symmetries:
 
 1.  **Antisymmetry in the first two indices:**
-    $$ R_{\mu\nu\rho\sigma} = -R_{\nu\mu\rho\sigma} $$
+
+    $$R_{\mu\nu\rho\sigma} = -R_{\nu\mu\rho\sigma}$$
+
 2.  **Antisymmetry in the last two indices:**
-    $$ R_{\mu\nu\rho\sigma} = -R_{\mu\nu\sigma\rho} $$
+
+    $$R_{\mu\nu\rho\sigma} = -R_{\mu\nu\sigma\rho}$$
+
 3.  **Pairwise interchange symmetry:**
-    $$ R_{\mu\nu\rho\sigma} = R_{\rho\sigma\mu\nu} $$
+
+    $$R_{\mu\nu\rho\sigma} = R_{\rho\sigma\mu\nu}$$
+
 4.  **First Bianchi Identity (cyclic symmetry on the first three indices):**
-    $$ R_{\mu\nu\rho\sigma} + R_{\mu\rho\sigma\nu} + R_{\mu\sigma\nu\rho} = 0 $$
+
+    $$R_{\mu\nu\rho\sigma} + R_{\mu\rho\sigma\nu} + R_{\mu\sigma\nu\rho} = 0$$
 
 We can use the crate to canonicalize the Riemann tensor:
 
