@@ -2,11 +2,11 @@
 name = "butler-portugal"
 version = "0.1.0"
 edition = "2021"
-authors = ["Butler-Portugal Library Contributors"]
-description = "A Rust library implementing the Butler-Portugal algorithm for tensor canonicalization in theoretical physics"
+authors = ["Stephen Diehl"]
+description = "A Rust library implementing the Butler-Portugal algorithm for tensor canonicalization"
 readme = "README.md"
-repository = "https://github.com/example/butler-portugal"
-license = "MIT OR Apache-2.0"
+repository = "https://github.com/sdiehl/butler-portugal"
+license = "MIT"
 keywords = ["physics", "tensor", "canonicalization", "symmetry", "relativity"]
 categories = ["science", "mathematics"]
 
