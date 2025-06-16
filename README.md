@@ -1,8 +1,8 @@
 # Butler-Portugal
 
-An implementation of the Butler-Portugal algorithm for tensor canonicalization.
+A Rust implementation of the Butler-Portugal algorithm for tensor canonicalization.
 
-The Butler-Portugal algorithm is a systematic method for bringing tensors into canonical form by applying symmetry operations. We use the double coset approach where a tensor with slot symmetries $S$ and dummy symmetries $D$ is canonicalized by finding the minimal representative in the double coset $D*g*S$.
+The Butler-Portugal algorithm is a systematic method for bringing tensors into canonical form by applying symmetry operations. We use the double coset approach where a tensor with slot symmetries $S$ and dummy symmetries $D$ is canonicalized by finding the minimal representative in the double coset $D \cdot g \cdot S$.
 
 ## Usage
 

@@ -1,23 +1,57 @@
 [package]
 name = "butler-portugal"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Stephen Diehl"]
 description = "A Rust library implementing the Butler-Portugal algorithm for tensor canonicalization"
 readme = "README.md"
 repository = "https://github.com/sdiehl/butler-portugal"
+homepage = "https://github.com/sdiehl/butler-portugal"
+documentation = "https://docs.rs/butler-portugal"
 license = "MIT"
 keywords = ["physics", "tensor", "canonicalization", "symmetry", "relativity"]
 categories = ["science", "mathematics"]
+rust-version = "1.70.0"
+include = [
+    "src/**/*",
+    "examples/**/*",
+    "tests/**/*",
+    "benches/**/*",
+    "README.md",
+    "LICENSE",
+    "Cargo.toml",
+]
+exclude = [
+    ".github/**/*",
+]
 
 [dependencies]
 
 [dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
 
 [[example]]
 name = "basic_usage"
-path = "examples/basic_usage.rs"
+
+[[bench]]
+name = "bench"
+harness = false
 
 [lib]
 name = "butler_portugal"
 path = "src/lib.rs"
+doctest = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
