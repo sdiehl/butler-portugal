@@ -1,0 +1,23 @@
+[package]
+name = "butler-portugal"
+version = "0.1.0"
+edition = "2021"
+authors = ["Butler-Portugal Library Contributors"]
+description = "A Rust library implementing the Butler-Portugal algorithm for tensor canonicalization in theoretical physics"
+readme = "README.md"
+repository = "https://github.com/example/butler-portugal"
+license = "MIT OR Apache-2.0"
+keywords = ["physics", "tensor", "canonicalization", "symmetry", "relativity"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+
+[dev-dependencies]
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
+
+[lib]
+name = "butler_portugal"
+path = "src/lib.rs"
