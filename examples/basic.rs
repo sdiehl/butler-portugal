@@ -43,10 +43,10 @@ fn example_symmetric_tensor() -> Result<()> {
     // Add symmetry: g_μν = g_νμ
     g.add_symmetry(Symmetry::symmetric(vec![0, 1]));
 
-    println!("Original tensor: {}", g);
+    println!("Original tensor: {g}");
 
     let canonical = canonicalize(&g)?;
-    println!("Canonical form: {}", canonical);
+    println!("Canonical form: {canonical}");
     println!("Coefficient: {}\n", canonical.coefficient());
 
     Ok(())
@@ -65,10 +65,10 @@ fn example_antisymmetric_tensor() -> Result<()> {
     // Add antisymmetry: A_μν = -A_νμ
     a.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
 
-    println!("Original tensor: {}", a);
+    println!("Original tensor: {a}");
 
     let canonical = canonicalize(&a)?;
-    println!("Canonical form: {}", canonical);
+    println!("Canonical form: {canonical}");
     println!(
         "Coefficient: {} (sign changed due to antisymmetry)\n",
         canonical.coefficient()
@@ -102,10 +102,10 @@ fn example_riemann_tensor() -> Result<()> {
     // R_abcd = R_cdab (symmetric exchange of pairs)
     riemann.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
 
-    println!("Original tensor: {}", riemann);
+    println!("Original tensor: {riemann}");
 
     let canonical = canonicalize(&riemann)?;
-    println!("Canonical form: {}", canonical);
+    println!("Canonical form: {canonical}");
     println!("Coefficient: {}\n", canonical.coefficient());
 
     Ok(())
@@ -124,10 +124,10 @@ fn example_electromagnetic_tensor() -> Result<()> {
     // F_μν = -F_νμ (antisymmetric)
     f.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
 
-    println!("Original tensor: {}", f);
+    println!("Original tensor: {f}");
 
     let canonical = canonicalize(&f)?;
-    println!("Canonical form: {}", canonical);
+    println!("Canonical form: {canonical}");
     println!("Coefficient: {}\n", canonical.coefficient());
 
     Ok(())
@@ -151,10 +151,10 @@ fn example_mixed_variance_tensor() -> Result<()> {
     // Add some symmetries
     mixed_riemann.add_symmetry(Symmetry::antisymmetric(vec![1, 3])); // Lower indices antisymmetric
 
-    println!("Original tensor: {}", mixed_riemann);
+    println!("Original tensor: {mixed_riemann}");
 
     let canonical = canonicalize(&mixed_riemann)?;
-    println!("Canonical form: {}", canonical);
+    println!("Canonical form: {canonical}");
     println!("Coefficient: {}\n", canonical.coefficient());
 
     Ok(())
@@ -176,10 +176,10 @@ fn example_zero_tensor() -> Result<()> {
     // A_μν = -A_νμ, but with μ=ν this gives A_μμ = -A_μμ, so A_μμ = 0
     zero_tensor.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
 
-    println!("Original tensor: {}", zero_tensor);
+    println!("Original tensor: {zero_tensor}");
 
     let canonical = canonicalize(&zero_tensor)?;
-    println!("Canonical form: {}", canonical);
+    println!("Canonical form: {canonical}");
     println!(
         "Coefficient: {} (zero due to antisymmetry with repeated indices)\n",
         canonical.coefficient()
@@ -204,7 +204,7 @@ fn demonstrate_tensor_operations() -> Result<()> {
         ],
     );
 
-    println!("Original tensor: {}", tensor);
+    println!("Original tensor: {tensor}");
     println!("Rank: {}", tensor.rank());
 
     // Add symmetries
@@ -212,11 +212,12 @@ fn demonstrate_tensor_operations() -> Result<()> {
     tensor.add_symmetry(Symmetry::antisymmetric(vec![1, 2]));
 
     println!("Symmetries added: {}", tensor.symmetries().len());
+    println!("Symmetries: {:?}", tensor.symmetries());
 
     // Try manual index swapping
     let sign = tensor.swap_indices(0, 1);
-    println!("After swapping indices 0,1: {}", tensor);
-    println!("Sign change: {}", sign);
+    println!("After swapping indices 0,1: {tensor}");
+    println!("Sign change: {sign}");
 
     Ok(())
 }
