@@ -4,23 +4,20 @@
 //! in theoretical physics applications. The algorithm systematically applies symmetry
 //! operations to bring tensors into canonical form.
 //!
-//! ## Features
-//! - Core Butler-Portugal algorithm implementation
-//! - Support for symmetric and antisymmetric tensors
-//! - Flexible tensor representation with named indices
-//! - Comprehensive error handling
-//!
 //! ## Example
 //! ```rust
-//! use butler_portugal::{Tensor, TensorIndex, Symmetry, canonicalize};
+//! use butler_portugal::{canonicalize, Symmetry, Tensor, TensorIndex};
 //!
 //! // Create a tensor with some indices
-//! let mut tensor = Tensor::new("R", vec![
-//!     TensorIndex::new("a", 0),
-//!     TensorIndex::new("b", 1),
-//!     TensorIndex::new("c", 2),
-//!     TensorIndex::new("d", 3),
-//! ]);
+//! let mut tensor = Tensor::new(
+//!     "R",
+//!     vec![
+//!         TensorIndex::new("a", 0),
+//!         TensorIndex::new("b", 1),
+//!         TensorIndex::new("c", 2),
+//!         TensorIndex::new("d", 3),
+//!     ],
+//! );
 //!
 //! // Add symmetry properties (Riemann tensor symmetries)
 //! tensor.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));

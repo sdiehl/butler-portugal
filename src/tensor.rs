@@ -31,10 +31,10 @@ impl Tensor {
     /// ```rust
     /// use butler_portugal::{Tensor, TensorIndex};
     ///
-    /// let tensor = Tensor::new("g", vec![
-    ///     TensorIndex::new("mu", 0),
-    ///     TensorIndex::new("nu", 1),
-    /// ]);
+    /// let tensor = Tensor::new(
+    ///     "g",
+    ///     vec![TensorIndex::new("mu", 0), TensorIndex::new("nu", 1)],
+    /// );
     /// ```
     pub fn new(name: &str, indices: Vec<TensorIndex>) -> Self {
         Self {
@@ -260,7 +260,7 @@ mod tests {
             vec![TensorIndex::new("mu", 0), TensorIndex::new("nu", 1)],
         );
 
-        let display = format!("{}", tensor);
+        let display = format!("{tensor}");
         assert!(display.contains("g"));
         assert!(display.contains("mu"));
         assert!(display.contains("nu"));

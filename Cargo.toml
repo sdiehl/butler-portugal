@@ -31,7 +31,7 @@ exclude = [
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [[example]]
-name = "basic_usage"
+name = "basic"
 
 [[bench]]
 name = "bench"
@@ -55,3 +55,22 @@ opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
+
+[lints.clippy]
+# pedantic = "warn"
+unwrap_used = "deny"
+panic = "deny"
+needless_bool = "deny"
+expect_used = "warn"
+single_match = "warn"
+single_match_else = "warn"
+needless_match = "warn"
+needless_late_init = "warn"
+redundant_pattern_matching = "warn"
+redundant_pattern = "warn"
+redundant_guards = "warn"
+collapsible_match = "warn"
+match_single_binding = "warn"
+match_same_arms = "warn"
+match_ref_pats = "warn"
+match_bool = "warn"

@@ -138,8 +138,14 @@ impl Symmetry {
                 if indices.contains(&i) && indices.contains(&j) {
                     // For cyclic symmetry, adjacent swaps have sign +1
                     // Non-adjacent swaps need to be computed based on cycle structure
-                    let pos_i = indices.iter().position(|&x| x == i).unwrap();
-                    let pos_j = indices.iter().position(|&x| x == j).unwrap();
+                    let pos_i = match indices.iter().position(|&x| x == i) {
+                        Some(pos) => pos,
+                        None => return 1,
+                    };
+                    let pos_j = match indices.iter().position(|&x| x == j) {
+                        Some(pos) => pos,
+                        None => return 1,
+                    };
                     let distance = (pos_i as i32 - pos_j as i32).abs();
                     if distance == 1 || distance == indices.len() as i32 - 1 {
                         1 // Adjacent in cycle
@@ -178,17 +184,14 @@ impl Symmetry {
     /// * `permutation` - The permutation to check
     pub fn permutation_sign(&self, permutation: &[usize]) -> i32 {
         match self {
-            Self::Symmetric { indices: _ } => {
+            // merge symmetric and symmetric pairs into one case
+            Self::Symmetric { indices: _ } | Self::SymmetricPairs { pairs: _ } => {
                 // Symmetric groups always have sign +1
                 1
             }
             Self::Antisymmetric { indices } => {
                 // Calculate sign based on parity of permutation within the antisymmetric group
                 self.antisymmetric_permutation_sign(permutation, indices)
-            }
-            Self::SymmetricPairs { pairs: _ } => {
-                // Pair exchanges are always symmetric
-                1
             }
             Self::Cyclic { indices } => {
                 // Calculate sign for cyclic permutation

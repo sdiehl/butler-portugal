@@ -61,20 +61,23 @@ impl BSGS {
 ///
 /// # Example
 /// ```rust
-/// use butler_portugal::{Tensor, TensorIndex, Symmetry, canonicalize};
+/// use butler_portugal::{canonicalize, Symmetry, Tensor, TensorIndex};
 ///
-/// let mut tensor = Tensor::new("R", vec![
-///     TensorIndex::new("a", 0),
-///     TensorIndex::new("b", 1),
-///     TensorIndex::new("c", 2),
-///     TensorIndex::new("d", 3),
-/// ]);
+/// let mut tensor = Tensor::new(
+///     "R",
+///     vec![
+///         TensorIndex::new("a", 0),
+///         TensorIndex::new("b", 1),
+///         TensorIndex::new("c", 2),
+///         TensorIndex::new("d", 3),
+///     ],
+/// );
 ///
 /// // Riemann tensor symmetries
 /// tensor.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
 /// tensor.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
 ///
-/// let canonical = canonicalize(&tensor).unwrap();
+/// let canonical = canonicalize(&tensor);
 /// ```
 pub fn canonicalize(tensor: &Tensor) -> Result<Tensor> {
     // Handle trivial cases
@@ -117,20 +120,24 @@ pub fn canonicalize(tensor: &Tensor) -> Result<Tensor> {
 
         let canonical_key = tensor_canonical_key(&candidate);
 
-        if best_canonical_key.is_none() || canonical_key < *best_canonical_key.as_ref().unwrap() {
+        if let Some(ref best_key) = best_canonical_key {
+            if canonical_key < *best_key {
+                best_canonical_key = Some(canonical_key);
+                best_tensor = Some(candidate);
+            }
+        } else {
             best_canonical_key = Some(canonical_key);
             best_tensor = Some(candidate);
         }
     }
 
-    match best_tensor {
-        Some(tensor) => Ok(tensor),
-        None => {
-            // All permutations resulted in zero
-            let mut zero_tensor = tensor.clone();
-            zero_tensor.set_coefficient(0);
-            Ok(zero_tensor)
-        }
+    if let Some(tensor) = best_tensor {
+        Ok(tensor)
+    } else {
+        // All permutations resulted in zero
+        let mut zero_tensor = tensor.clone();
+        zero_tensor.set_coefficient(0);
+        Ok(zero_tensor)
     }
 }
 
@@ -360,7 +367,10 @@ mod tests {
     #[test]
     fn test_trivial_canonicalization() {
         let tensor = Tensor::new("T", vec![TensorIndex::new("i", 0)]);
-        let result = canonicalize(&tensor).unwrap();
+        let result = match canonicalize(&tensor) {
+            Ok(val) => val,
+            Err(e) => panic!("canonicalize failed: {}", e),
+        };
         assert_eq!(result, tensor);
     }
 
@@ -373,7 +383,10 @@ mod tests {
 
         tensor.add_symmetry(Symmetry::symmetric(vec![0, 1]));
 
-        let result = canonicalize(&tensor).unwrap();
+        let result = match canonicalize(&tensor) {
+            Ok(val) => val,
+            Err(e) => panic!("canonicalize failed: {}", e),
+        };
         assert_eq!(result.indices()[0].name(), "a");
         assert_eq!(result.indices()[1].name(), "b");
     }
@@ -387,7 +400,10 @@ mod tests {
 
         tensor.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
 
-        let result = canonicalize(&tensor).unwrap();
+        let result = match canonicalize(&tensor) {
+            Ok(val) => val,
+            Err(e) => panic!("canonicalize failed: {}", e),
+        };
         assert_eq!(result.indices()[0].name(), "a");
         assert_eq!(result.indices()[1].name(), "b");
         assert_eq!(result.coefficient(), -1); // Sign change from swap
@@ -402,7 +418,10 @@ mod tests {
 
         tensor.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
 
-        let result = canonicalize(&tensor).unwrap();
+        let result = match canonicalize(&tensor) {
+            Ok(val) => val,
+            Err(e) => panic!("canonicalize failed: {}", e),
+        };
         assert_eq!(result.coefficient(), 0);
     }
 

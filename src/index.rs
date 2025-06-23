@@ -202,7 +202,7 @@ mod tests {
         let covariant = TensorIndex::covariant("mu", 0);
         let contravariant = TensorIndex::contravariant("nu", 1);
 
-        assert_eq!(format!("{}", covariant), "_mu");
-        assert_eq!(format!("{}", contravariant), "^nu");
+        assert_eq!(format!("{covariant}"), "_mu");
+        assert_eq!(format!("{contravariant}"), "^nu");
     }
 }

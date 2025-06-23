@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn test_error_display() {
         let err = ButlerPortugalError::InvalidPermutation("test message".to_string());
-        let display = format!("{}", err);
+        let display = format!("{err}");
         assert!(display.contains("Invalid permutation"));
         assert!(display.contains("test message"));
     }

@@ -12,7 +12,11 @@ To add the crate to your project, run:
 cargo add butler-portugal
 ```
 
-For example, the Riemann curvature tensor $R_{\mu\nu\rho\sigma}$ satisfies the following symmetries:
+For example usage, see the [basic.rs](examples/basic.rs) example.
+
+## Example
+
+The Riemann curvature tensor $R_{\mu\nu\rho\sigma}$ satisfies the following symmetries:
 
 1.  **Antisymmetry in the first two indices:**
 
@@ -52,11 +56,9 @@ riemann.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
 // Symmetric exchange of pairs
 riemann.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
 
-let canonical = canonicalize(&riemann).unwrap();
+let canonical = canonicalize(&riemann);
 ```
-
-See [examples/basic_usage.rs](examples/basic_usage.rs) for more examples.
 
 ## License
 
-Released under the MIT License. See the LICENSE file for details.
+Released under the MIT License. See the [LICENSE](LICENSE) file for details.
