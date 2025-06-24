@@ -369,7 +369,7 @@ mod tests {
         let tensor = Tensor::new("T", vec![TensorIndex::new("i", 0)]);
         let result = match canonicalize(&tensor) {
             Ok(val) => val,
-            Err(e) => panic!("canonicalize failed: {}", e),
+            Err(e) => panic!("canonicalize failed: {e}"),
         };
         assert_eq!(result, tensor);
     }
@@ -385,7 +385,7 @@ mod tests {
 
         let result = match canonicalize(&tensor) {
             Ok(val) => val,
-            Err(e) => panic!("canonicalize failed: {}", e),
+            Err(e) => panic!("canonicalize failed: {e}"),
         };
         assert_eq!(result.indices()[0].name(), "a");
         assert_eq!(result.indices()[1].name(), "b");
@@ -402,7 +402,7 @@ mod tests {
 
         let result = match canonicalize(&tensor) {
             Ok(val) => val,
-            Err(e) => panic!("canonicalize failed: {}", e),
+            Err(e) => panic!("canonicalize failed: {e}"),
         };
         assert_eq!(result.indices()[0].name(), "a");
         assert_eq!(result.indices()[1].name(), "b");
@@ -420,7 +420,7 @@ mod tests {
 
         let result = match canonicalize(&tensor) {
             Ok(val) => val,
-            Err(e) => panic!("canonicalize failed: {}", e),
+            Err(e) => panic!("canonicalize failed: {e}"),
         };
         assert_eq!(result.coefficient(), 0);
     }

@@ -172,7 +172,7 @@ fn test_complex_tensor_with_multiple_symmetries() {
     assert!(!canonical.is_zero());
 
     // The exact form depends on the algorithm, but it should be consistent
-    let result_str = format!("{}", canonical);
+    let result_str = format!("{canonical}");
     assert!(result_str.contains("C"));
 }
 

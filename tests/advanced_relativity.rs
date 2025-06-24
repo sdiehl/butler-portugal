@@ -450,7 +450,7 @@ fn test_comprehensive_relativity_performance() {
 
     for (name, rank, symmetries) in tensor_configs {
         let indices: Vec<TensorIndex> = (0..rank)
-            .map(|i| TensorIndex::new(&format!("idx{}", i), i))
+            .map(|i| TensorIndex::new(&format!("idx{i}"), i))
             .collect();
 
         let mut tensor = Tensor::new(name, indices);

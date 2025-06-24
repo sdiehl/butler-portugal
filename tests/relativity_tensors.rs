@@ -496,10 +496,10 @@ fn test_performance_large_riemann_variations() {
         let mut riemann = Tensor::new(
             "R",
             vec![
-                TensorIndex::new(&format!("i{}", i), 0),
-                TensorIndex::new(&format!("j{}", i), 1),
-                TensorIndex::new(&format!("k{}", i), 2),
-                TensorIndex::new(&format!("l{}", i), 3),
+                TensorIndex::new(&format!("i{i}"), 0),
+                TensorIndex::new(&format!("j{i}"), 1),
+                TensorIndex::new(&format!("k{i}"), 2),
+                TensorIndex::new(&format!("l{i}"), 3),
             ],
         );
 
