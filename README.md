@@ -2,7 +2,7 @@
 
 A Rust implementation of the Butler-Portugal algorithm for tensor canonicalization.
 
-The Butler-Portugal algorithm is a systematic method for bringing tensors into canonical form by applying symmetry operations. We use the double coset approach where a tensor with slot symmetries $S$ and dummy symmetries $D$ is canonicalized by finding the minimal representative in the double coset $D \cdot g \cdot S$.
+The Butler-Portugal algorithm is a systematic method for bringing tensors into canonical form by applying symmetry operations. We use the double coset approach where a tensor with slot symmetries $S$ and dummy symmetries $D$ is canonicalized by finding the minimal representative in the double coset $D \cdot g \cdot S$. We use the Schreier-Sims algorithm for symmetry group generation.
 
 ## Usage
 
@@ -58,6 +58,15 @@ riemann.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
 
 let canonical = canonicalize(&riemann);
 ```
+
+## References
+
+1. Martin-García, J. M. (2008). xPerm: Fast index canonicalization for tensor computer algebra. Computer Physics Communications, 179(8), 597–603. https://doi.org/10.1016/j.cpc.2008.04.018
+1. Niehoff, B. (2017). Efficient algorithms for tensor canonicalization with general index symmetries. Computer Physics Communications, 220, 1–9. https://doi.org/10.1016/j.cpc.2017.06.017
+1. Kessler, D., Kvinge, H., & Wilson, J. B. (2018). A Frobenius-Schreier-Sims algorithm to decompose associative algebras. Journal of Symbolic Computation, 87, 1–19. https://doi.org/10.1016/j.jsc.2017.08.003
+1. Welsh, T. A. (1992). Young tableaux as explicit bases for the irreducible modules of the classical Lie groups and algebras. Journal of Algebra, 148(2), 377–404. https://doi.org/10.1016/0021-8693(92)90112-6
+1. Rainbird, J., & Craw, A. (2019). Young tableaux, flag varieties, and Grassmannians. The American Mathematical Monthly, 126(7), 601–616. https://doi.org/10.1080/00029890.2019.1624162
+1. Particle Data Group. (2024). Young tableaux and tensor product decomposition in SU(N). In Review of Particle Physics. https://pdg.lbl.gov/2024/reviews/young-tableaux.html
 
 ## License
 

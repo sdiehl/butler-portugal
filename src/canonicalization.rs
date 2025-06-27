@@ -9,9 +9,9 @@
 
 use crate::error::Result;
 use crate::index::TensorIndex;
+use crate::schreier_sims::schreier_sims;
 use crate::symmetry::Symmetry;
 use crate::tensor::Tensor;
-use std::collections::HashSet;
 
 /// Represents a permutation in array form
 pub type Permutation = Vec<usize>;
@@ -141,37 +141,34 @@ pub fn canonicalize(tensor: &Tensor) -> Result<Tensor> {
     }
 }
 
-/// Generates all valid permutations respecting symmetries using orbit generation
+/// Generates all valid permutations respecting symmetries using Schreier-Sims BSGS
 fn generate_valid_permutations(tensor: &Tensor) -> Vec<Permutation> {
     let n = tensor.rank();
+    let generators = tensor_symmetry_generators(tensor);
+    let bsgs = schreier_sims(&generators, n);
+    enumerate_group(&bsgs, n)
+}
 
-    // Start with identity permutation
-    let identity: Vec<usize> = (0..n).collect();
-    let mut orbit = vec![identity.clone()];
+/// Enumerate all group elements from a BSGS (brute-force for now)
+fn enumerate_group(bsgs: &BSGS, degree: usize) -> Vec<Permutation> {
+    // For now, fallback to BFS using the strong generators
+    use std::collections::{HashSet, VecDeque};
+    let identity: Permutation = (0..degree).collect();
+    let mut group = vec![identity.clone()];
     let mut visited = HashSet::new();
     visited.insert(identity.clone());
-
-    // Generate orbit under symmetry group using breadth-first search
-    let mut queue = vec![identity];
-
-    while let Some(current_perm) = queue.pop() {
-        // Apply each symmetry generator
-        for symmetry in tensor.symmetries() {
-            let generators = symmetry_to_generators(symmetry, n);
-
-            for gen in generators {
-                let new_perm = compose_permutations(&current_perm, &gen);
-
-                if !visited.contains(&new_perm) {
-                    visited.insert(new_perm.clone());
-                    orbit.push(new_perm.clone());
-                    queue.push(new_perm);
-                }
+    let mut queue = VecDeque::new();
+    queue.push_back(identity);
+    while let Some(perm) = queue.pop_front() {
+        for gen in &bsgs.generators {
+            let new_perm = crate::schreier_sims::compose_permutations(&perm, gen);
+            if visited.insert(new_perm.clone()) {
+                group.push(new_perm.clone());
+                queue.push_back(new_perm);
             }
         }
     }
-
-    orbit
+    group
 }
 
 /// Creates a canonical key for tensor comparison
@@ -271,23 +268,6 @@ fn symmetry_to_generators(symmetry: &Symmetry, size: usize) -> Vec<Permutation> 
     }
 }
 
-/// Composes two permutations (applies first, then second)
-fn compose_permutations(perm1: &[usize], perm2: &[usize]) -> Permutation {
-    let size = perm1.len().max(perm2.len());
-    let mut result = vec![0; size];
-
-    for i in 0..size {
-        let intermediate = if i < perm1.len() { perm1[i] } else { i };
-        result[i] = if intermediate < perm2.len() {
-            perm2[intermediate]
-        } else {
-            intermediate
-        };
-    }
-
-    result
-}
-
 /// Checks if a permutation is the identity
 #[allow(dead_code)]
 fn is_identity(perm: &[usize]) -> bool {
@@ -357,6 +337,16 @@ fn canonicalize_antisymmetric_tensor(tensor: &Tensor) -> Result<Tensor> {
 
     let permutation: Vec<usize> = indices_with_positions.iter().map(|(pos, _)| *pos).collect();
     tensor.permute(&permutation)
+}
+
+/// Converts all tensor symmetries into a flat list of permutation generators
+fn tensor_symmetry_generators(tensor: &Tensor) -> Vec<Permutation> {
+    let n = tensor.rank();
+    let mut gens = Vec::new();
+    for sym in tensor.symmetries() {
+        gens.extend(symmetry_to_generators(sym, n));
+    }
+    gens
 }
 
 #[cfg(test)]
@@ -432,17 +422,6 @@ mod tests {
 
         let non_identity = vec![1, 0, 2, 3];
         assert!(!is_identity(&non_identity));
-    }
-
-    #[test]
-    fn test_permutation_composition() {
-        let perm1 = vec![1, 0, 2, 3];
-        let perm2 = vec![0, 1, 3, 2];
-        let composed = compose_permutations(&perm1, &perm2);
-
-        // Apply perm1 first: [1,0,2,3], then perm2: [0,1,3,2]
-        // Result should map 0->1->1, 1->0->0, 2->2->3, 3->3->2
-        assert_eq!(composed, vec![1, 0, 3, 2]);
     }
 
     #[test]
