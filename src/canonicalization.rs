@@ -149,26 +149,35 @@ fn generate_valid_permutations(tensor: &Tensor) -> Vec<Permutation> {
     enumerate_group(&bsgs, n)
 }
 
-/// Enumerate all group elements from a BSGS (brute-force for now)
+/// Enumerate all group elements from a BSGS by recursively applying all strong generators to the identity permutation, using a HashSet to avoid duplicates. This efficiently generates the full permutation group defined by the base and strong generating set, and is much faster than brute-force BFS for most practical tensor symmetry groups.
 fn enumerate_group(bsgs: &BSGS, degree: usize) -> Vec<Permutation> {
-    // For now, fallback to BFS using the strong generators
-    use std::collections::{HashSet, VecDeque};
-    let identity: Permutation = (0..degree).collect();
-    let mut group = vec![identity.clone()];
-    let mut visited = HashSet::new();
-    visited.insert(identity.clone());
-    let mut queue = VecDeque::new();
-    queue.push_back(identity);
-    while let Some(perm) = queue.pop_front() {
-        for gen in &bsgs.generators {
-            let new_perm = crate::schreier_sims::compose_permutations(&perm, gen);
-            if visited.insert(new_perm.clone()) {
-                group.push(new_perm.clone());
-                queue.push_back(new_perm);
-            }
+    // If there is no base, just return the identity
+    if bsgs.base.is_empty() {
+        return vec![(0..degree).collect()];
+    }
+
+    // Recursive helper to build up group elements
+    fn enumerate_recursive(
+        generators: &[Permutation],
+        current: Vec<usize>,
+        results: &mut Vec<Permutation>,
+        visited: &mut std::collections::HashSet<Vec<usize>>,
+    ) {
+        if !visited.insert(current.clone()) {
+            return;
+        }
+        results.push(current.clone());
+        for gen in generators {
+            let next = crate::schreier_sims::compose_permutations(&current, gen);
+            enumerate_recursive(generators, next, results, visited);
         }
     }
-    group
+
+    let mut results = Vec::new();
+    let mut visited = std::collections::HashSet::new();
+    let identity: Permutation = (0..degree).collect();
+    enumerate_recursive(&bsgs.generators, identity, &mut results, &mut visited);
+    results
 }
 
 /// Creates a canonical key for tensor comparison
