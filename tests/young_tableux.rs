@@ -3,6 +3,8 @@
 //! These tests verify the complete functionality of the library
 //! including complex tensor canonicalization scenarios.
 
+use butler_portugal::canonicalize_with_optimizations;
+use butler_portugal::young_tableaux::{Shape, StandardTableau};
 use butler_portugal::*;
 
 #[test]
@@ -257,7 +259,7 @@ fn test_optimization_paths() {
     riemann.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
 
     let standard = canonicalize(&riemann).unwrap();
-    let optimized = canonicalize_with_optimizations(&riemann).unwrap();
+    let optimized = canonicalize_with_optimizations(&riemann, None).unwrap();
 
     // Both should give the same result
     assert_eq!(standard.indices()[0].name(), optimized.indices()[0].name());
@@ -295,4 +297,20 @@ fn test_large_tensor_performance() {
     // Should complete in reasonable time (less than 1 second for this size)
     assert!(duration.as_secs() < 1);
     assert!(!canonical.is_zero());
+}
+
+#[test]
+fn test_tensor_projection_with_tableau() {
+    use butler_portugal::{Tensor, TensorIndex};
+    // Symmetric tableau shape for 2 indices
+    let shape = Shape(vec![2]);
+    let tableau = StandardTableau::new(shape, vec![vec![1, 2]]).unwrap();
+    let tensor = Tensor::new(
+        "S",
+        vec![TensorIndex::new("b", 0), TensorIndex::new("a", 1)],
+    );
+    let projected = canonicalize_with_optimizations(&tensor, Some(&tableau)).unwrap();
+    // The result should be symmetric in a and b, so indices should be sorted
+    assert_eq!(projected.indices()[0].name(), "a");
+    assert_eq!(projected.indices()[1].name(), "b");
 }

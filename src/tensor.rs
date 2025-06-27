@@ -5,6 +5,7 @@
 
 use crate::index::TensorIndex;
 use crate::symmetry::Symmetry;
+use crate::young_tableaux::{young_symmetrizer_permutations, StandardTableau};
 use std::fmt;
 
 /// Represents a tensor with indices and symmetry properties
@@ -183,6 +184,65 @@ impl Tensor {
                 .symmetries
                 .iter()
                 .any(|s| s.makes_tensor_zero(&self.indices))
+    }
+
+    /// Project this tensor onto the irreducible representation specified by a Young tableau.
+    /// This is an advanced, optional symmetry projection method.
+    ///
+    /// # Arguments
+    /// * `tableau` - The standard tableau specifying the symmetry type
+    ///
+    /// # Returns
+    /// The projected tensor (or an error if permutation fails)
+    pub fn project_with_tableau(&self, tableau: &StandardTableau) -> crate::Result<Tensor> {
+        let degree = self.rank();
+        let perms = young_symmetrizer_permutations(tableau, degree);
+        let mut result = None;
+        for (perm, sign) in perms {
+            let mut t = self.permute(&perm)?;
+            t.set_coefficient(t.coefficient() * sign);
+            result = match result {
+                Some(acc) => Some(add_tensors(&acc, &t)?),
+                None => Some(t),
+            };
+        }
+        result.ok_or_else(|| {
+            crate::ButlerPortugalError::InvalidPermutation(
+                "No permutations in Young symmetrizer".to_string(),
+            )
+        })
+    }
+}
+
+/// Helper: add two tensors if their names and indices (by name/variance) match, summing coefficients
+fn add_tensors(a: &Tensor, b: &Tensor) -> crate::Result<Tensor> {
+    if a.name() != b.name() {
+        return Err(crate::ButlerPortugalError::IncompatibleTensors(
+            "Cannot add tensors with different names".to_string(),
+        ));
+    }
+    // Normalize indices by name and variance (ignore position)
+    let mut a_indices: Vec<_> = a.indices().iter().collect();
+    let mut b_indices: Vec<_> = b.indices().iter().collect();
+    a_indices.sort_by(|x, y| x.canonical_cmp(y));
+    b_indices.sort_by(|x, y| x.canonical_cmp(y));
+    let indices_match = a_indices
+        .iter()
+        .zip(&b_indices)
+        .all(|(x, y)| x.name() == y.name() && x.is_contravariant() == y.is_contravariant());
+    if indices_match {
+        // Use canonical order for result
+        let mut result = a.clone();
+        result.set_coefficient(a.coefficient() + b.coefficient());
+        // Sort indices to canonical order
+        let mut indices: Vec<_> = result.indices.clone();
+        indices.sort_by(|x, y| x.canonical_cmp(y));
+        result.indices = indices;
+        Ok(result)
+    } else {
+        Err(crate::ButlerPortugalError::IncompatibleTensors(
+            "Cannot add tensors with different indices (by name/variance)".to_string(),
+        ))
     }
 }
 

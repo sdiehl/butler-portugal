@@ -275,9 +275,12 @@ fn is_identity(perm: &[usize]) -> bool {
 }
 
 /// Advanced canonicalization with optimization for specific tensor types
-pub fn canonicalize_with_optimizations(tensor: &Tensor) -> Result<Tensor> {
-    // Check for common tensor patterns and apply optimized algorithms
-    if is_riemann_like(tensor) {
+/// Optionally, project onto a Young tableau if provided (advanced feature)
+pub fn canonicalize_with_optimizations(
+    tensor: &Tensor,
+    tableau: Option<&crate::young_tableaux::StandardTableau>,
+) -> Result<Tensor> {
+    let mut result = if is_riemann_like(tensor) {
         canonicalize_riemann_tensor(tensor)
     } else if is_symmetric_tensor(tensor) {
         canonicalize_symmetric_tensor(tensor)
@@ -285,7 +288,11 @@ pub fn canonicalize_with_optimizations(tensor: &Tensor) -> Result<Tensor> {
         canonicalize_antisymmetric_tensor(tensor)
     } else {
         canonicalize(tensor)
+    }?;
+    if let Some(tab) = tableau {
+        result = result.project_with_tableau(tab)?;
     }
+    Ok(result)
 }
 
 /// Checks if tensor has Riemann-like symmetries

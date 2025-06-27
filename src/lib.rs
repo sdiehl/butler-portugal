@@ -33,9 +33,9 @@ pub mod canonicalization;
 pub mod error;
 pub mod index;
 pub mod schreier_sims;
-pub mod young_tableaux;
 pub mod symmetry;
 pub mod tensor;
+pub mod young_tableaux;
 
 pub use canonicalization::{canonicalize, canonicalize_with_optimizations};
 pub use error::{ButlerPortugalError, Result};
