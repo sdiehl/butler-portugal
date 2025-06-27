@@ -159,24 +159,24 @@ fn enumerate_group(bsgs: &BSGS, degree: usize) -> Vec<Permutation> {
     // Recursive helper to build up group elements
     fn enumerate_recursive(
         generators: &[Permutation],
-        current: Vec<usize>,
+        current: &[usize],
         results: &mut Vec<Permutation>,
         visited: &mut std::collections::HashSet<Vec<usize>>,
     ) {
-        if !visited.insert(current.clone()) {
+        if !visited.insert(current.to_owned()) {
             return;
         }
-        results.push(current.clone());
+        results.push(current.to_owned());
         for gen in generators {
-            let next = crate::schreier_sims::compose_permutations(&current, gen);
-            enumerate_recursive(generators, next, results, visited);
+            let next = crate::schreier_sims::compose_permutations(current, gen);
+            enumerate_recursive(generators, &next, results, visited);
         }
     }
 
     let mut results = Vec::new();
     let mut visited = std::collections::HashSet::new();
     let identity: Permutation = (0..degree).collect();
-    enumerate_recursive(&bsgs.generators, identity, &mut results, &mut visited);
+    enumerate_recursive(&bsgs.generators, &identity, &mut results, &mut visited);
     results
 }
 
@@ -295,7 +295,7 @@ pub enum CanonicalizationMethod {
 pub fn canonicalize_with_optimizations(
     tensor: &Tensor,
     tableau: Option<&crate::young_tableaux::StandardTableau>,
-    method: CanonicalizationMethod,
+    method: &CanonicalizationMethod,
 ) -> Result<Tensor> {
     match method {
         CanonicalizationMethod::SchreierSims => {

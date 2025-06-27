@@ -260,7 +260,7 @@ fn test_optimization_paths() {
 
     let standard = canonicalize(&riemann).unwrap();
     let optimized =
-        canonicalize_with_optimizations(&riemann, None, CanonicalizationMethod::SchreierSims)
+        canonicalize_with_optimizations(&riemann, None, &CanonicalizationMethod::SchreierSims)
             .unwrap();
 
     // Both should give the same result
@@ -314,7 +314,7 @@ fn test_tensor_projection_with_tableau() {
     let projected = canonicalize_with_optimizations(
         &tensor,
         Some(&tableau),
-        CanonicalizationMethod::YoungSymmetrizer,
+        &CanonicalizationMethod::YoungSymmetrizer,
     )
     .unwrap();
     // The result should be symmetric in a and b, so indices should be sorted

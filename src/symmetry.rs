@@ -138,13 +138,11 @@ impl Symmetry {
                 if indices.contains(&i) && indices.contains(&j) {
                     // For cyclic symmetry, adjacent swaps have sign +1
                     // Non-adjacent swaps need to be computed based on cycle structure
-                    let pos_i = match indices.iter().position(|&x| x == i) {
-                        Some(pos) => pos,
-                        None => return 1,
+                    let Some(pos_i) = indices.iter().position(|&x| x == i) else {
+                        return 1;
                     };
-                    let pos_j = match indices.iter().position(|&x| x == j) {
-                        Some(pos) => pos,
-                        None => return 1,
+                    let Some(pos_j) = indices.iter().position(|&x| x == j) else {
+                        return 1;
                     };
                     let distance = (pos_i as i32 - pos_j as i32).abs();
                     if distance == 1 || distance == indices.len() as i32 - 1 {

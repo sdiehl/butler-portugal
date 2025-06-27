@@ -202,7 +202,7 @@ fn test_canonicalization_methods_comparison() {
     // Test Schreier-Sims method
     let start = Instant::now();
     let schreier_result =
-        canonicalize_with_optimizations(&tensor, None, CanonicalizationMethod::SchreierSims)
+        canonicalize_with_optimizations(&tensor, None, &CanonicalizationMethod::SchreierSims)
             .expect("Schreier-Sims canonicalization failed");
     let schreier_duration = start.elapsed();
 
@@ -213,7 +213,7 @@ fn test_canonicalization_methods_comparison() {
     let young_result = canonicalize_with_optimizations(
         &tensor,
         Some(&tableau),
-        CanonicalizationMethod::YoungSymmetrizer,
+        &CanonicalizationMethod::YoungSymmetrizer,
     )
     .expect("Young symmetrizer canonicalization failed");
     let young_duration = start.elapsed();

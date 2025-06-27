@@ -592,7 +592,7 @@ fn test_young_symmetrizer_canonicalization() {
     let projected = canonicalize_with_optimizations(
         &tensor,
         Some(&tableau),
-        CanonicalizationMethod::YoungSymmetrizer,
+        &CanonicalizationMethod::YoungSymmetrizer,
     )
     .unwrap();
     // The result should be symmetric in a and b, so indices should be sorted

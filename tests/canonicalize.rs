@@ -16,7 +16,7 @@ fn test_symmetric_tensor_canonicalization_methods() {
 
     // Schreier-Sims method
     let canonical_schreier =
-        canonicalize_with_optimizations(&tensor, None, CanonicalizationMethod::SchreierSims)
+        canonicalize_with_optimizations(&tensor, None, &CanonicalizationMethod::SchreierSims)
             .unwrap();
     assert_eq!(canonical_schreier.indices()[0].name(), "a");
     assert_eq!(canonical_schreier.indices()[1].name(), "b");
@@ -27,7 +27,7 @@ fn test_symmetric_tensor_canonicalization_methods() {
     let canonical_young = canonicalize_with_optimizations(
         &tensor,
         Some(&tableau),
-        CanonicalizationMethod::YoungSymmetrizer,
+        &CanonicalizationMethod::YoungSymmetrizer,
     )
     .unwrap();
     assert_eq!(canonical_young.indices()[0].name(), "a");
@@ -45,7 +45,7 @@ fn test_antisymmetric_tensor_canonicalization_methods() {
 
     // Schreier-Sims method
     let canonical_schreier =
-        canonicalize_with_optimizations(&tensor, None, CanonicalizationMethod::SchreierSims)
+        canonicalize_with_optimizations(&tensor, None, &CanonicalizationMethod::SchreierSims)
             .unwrap();
     assert_eq!(canonical_schreier.indices()[0].name(), "a");
     assert_eq!(canonical_schreier.indices()[1].name(), "b");
@@ -57,7 +57,7 @@ fn test_antisymmetric_tensor_canonicalization_methods() {
     let canonical_young = canonicalize_with_optimizations(
         &tensor,
         Some(&tableau),
-        CanonicalizationMethod::YoungSymmetrizer,
+        &CanonicalizationMethod::YoungSymmetrizer,
     )
     .unwrap();
     println!(
@@ -84,7 +84,7 @@ fn test_mixed_symmetry_tensor_canonicalization_methods() {
 
     // Schreier-Sims method (should just sort by name)
     let canonical_schreier =
-        canonicalize_with_optimizations(&tensor, None, CanonicalizationMethod::SchreierSims)
+        canonicalize_with_optimizations(&tensor, None, &CanonicalizationMethod::SchreierSims)
             .unwrap();
     assert_eq!(canonical_schreier.indices()[0].name(), "a");
     assert_eq!(canonical_schreier.indices()[1].name(), "b");
@@ -95,7 +95,7 @@ fn test_mixed_symmetry_tensor_canonicalization_methods() {
     let canonical_young = canonicalize_with_optimizations(
         &tensor,
         Some(&tableau),
-        CanonicalizationMethod::YoungSymmetrizer,
+        &CanonicalizationMethod::YoungSymmetrizer,
     )
     .unwrap();
     // Should be symmetric, so indices sorted

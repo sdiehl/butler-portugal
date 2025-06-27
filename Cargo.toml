@@ -59,19 +59,41 @@ panic = "abort"
 
 [lints.clippy]
 # pedantic = "warn"
+
 unwrap_used = "deny"
 panic = "deny"
-needless_bool = "deny"
 expect_used = "warn"
+get_unwrap = "warn"
+exit = "warn"
+
 single_match = "warn"
 single_match_else = "warn"
-needless_match = "warn"
-needless_late_init = "warn"
-redundant_pattern_matching = "warn"
-redundant_pattern = "warn"
-redundant_guards = "warn"
 collapsible_match = "warn"
 match_single_binding = "warn"
 match_same_arms = "warn"
 match_ref_pats = "warn"
+manual_let_else = "warn"
+
+too_many_arguments = "warn"
+too_many_lines = "warn"
+
+needless_match = "warn"
+needless_late_init = "warn"
+needless_pass_by_value = "warn"
+needless_continue = "warn"
+
+redundant_pattern_matching = "warn"
+redundant_pattern = "warn"
+redundant_guards = "warn"
+redundant_else = "warn"
+
+needless_bool = "deny"
 match_bool = "warn"
+
+empty_drop = "warn"
+empty_structs_with_brackets = "warn"
+
+rc_buffer = "warn"
+rc_mutex = "warn"
+
+rest_pat_in_fully_bound_structs = "warn"
