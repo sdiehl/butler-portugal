@@ -1,6 +1,6 @@
 [package]
 name = "butler-portugal"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 authors = ["Stephen Diehl"]
 description = "A Rust library implementing the Butler-Portugal algorithm for tensor canonicalization"
@@ -26,6 +26,7 @@ exclude = [
 ]
 
 [dependencies]
+itertools = "0.14.0"
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }
