@@ -4,7 +4,11 @@
 //! from general relativity, including all major tensor types used in
 //! Einstein's field equations and related physics.
 
+use butler_portugal::young_tableaux::{Shape, StandardTableau};
 use butler_portugal::*;
+use butler_portugal::{
+    canonicalize_with_optimizations, CanonicalizationMethod, Tensor, TensorIndex,
+};
 
 #[test]
 fn test_riemann_curvature_tensor_full_symmetries() {
@@ -574,4 +578,24 @@ fn test_all_relativity_tensors_comprehensive() {
             assert!(canonical.coefficient() != 0);
         }
     }
+}
+
+#[test]
+fn test_young_symmetrizer_canonicalization() {
+    // Symmetric tableau shape for 2 indices
+    let shape = Shape(vec![2]);
+    let tableau = StandardTableau::new(shape, vec![vec![1, 2]]).unwrap();
+    let tensor = Tensor::new(
+        "S",
+        vec![TensorIndex::new("b", 0), TensorIndex::new("a", 1)],
+    );
+    let projected = canonicalize_with_optimizations(
+        &tensor,
+        Some(&tableau),
+        CanonicalizationMethod::YoungSymmetrizer,
+    )
+    .unwrap();
+    // The result should be symmetric in a and b, so indices should be sorted
+    assert_eq!(projected.indices()[0].name(), "a");
+    assert_eq!(projected.indices()[1].name(), "b");
 }

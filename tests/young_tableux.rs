@@ -259,7 +259,9 @@ fn test_optimization_paths() {
     riemann.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
 
     let standard = canonicalize(&riemann).unwrap();
-    let optimized = canonicalize_with_optimizations(&riemann, None).unwrap();
+    let optimized =
+        canonicalize_with_optimizations(&riemann, None, CanonicalizationMethod::SchreierSims)
+            .unwrap();
 
     // Both should give the same result
     assert_eq!(standard.indices()[0].name(), optimized.indices()[0].name());
@@ -309,7 +311,12 @@ fn test_tensor_projection_with_tableau() {
         "S",
         vec![TensorIndex::new("b", 0), TensorIndex::new("a", 1)],
     );
-    let projected = canonicalize_with_optimizations(&tensor, Some(&tableau)).unwrap();
+    let projected = canonicalize_with_optimizations(
+        &tensor,
+        Some(&tableau),
+        CanonicalizationMethod::YoungSymmetrizer,
+    )
+    .unwrap();
     // The result should be symmetric in a and b, so indices should be sorted
     assert_eq!(projected.indices()[0].name(), "a");
     assert_eq!(projected.indices()[1].name(), "b");

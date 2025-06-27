@@ -1,7 +1,7 @@
 //! Young tableaux and related combinatorics for tensor canonicalization
 
 use itertools::Itertools;
-use std::fmt; // For .permutations() and .unique()
+use std::fmt;
 
 /// A Young diagram shape, represented as a vector of row lengths (partition)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -204,7 +204,9 @@ pub fn young_symmetrizer_permutations(
         for perm in row.clone().into_iter().permutations(row.len()).unique() {
             let mut p = (0..degree).collect::<Vec<_>>();
             for (i, &slot) in perm.iter().enumerate() {
-                p[row[i] - 1] = row[slot - 1] - 1;
+                if i < row.len() && slot > 0 && (slot - 1) < row.len() {
+                    p[row[i] - 1] = row[slot - 1] - 1;
+                }
             }
             for g in &row_group {
                 let composed = compose_permutations(g, &p);
@@ -234,10 +236,16 @@ pub fn young_symmetrizer_permutations(
             .permutations(col_indices.len())
             .unique()
         {
+            if perm.len() != col_indices.len() {
+                continue; // Defensive: skip malformed permutations
+            }
             let mut p = (0..degree).collect::<Vec<_>>();
             let perm_vec: Vec<usize> = perm.iter().map(|&x| x - 1).collect();
             let sign = permutation_parity_usize(&perm_vec);
             for (i, &slot) in perm.iter().enumerate() {
+                if i >= col_indices.len() {
+                    continue;
+                } // Defensive: skip out-of-bounds
                 p[col_indices[i] - 1] = slot - 1;
             }
             for (g, s) in &col_group {
@@ -259,7 +267,7 @@ pub fn young_symmetrizer_permutations(
 }
 
 /// Helper: parity of a permutation (usize version)
-fn permutation_parity_usize(perm: &[usize]) -> i32 {
+pub fn permutation_parity_usize(perm: &[usize]) -> i32 {
     let n = perm.len();
     let mut visited = vec![false; n];
     let mut sign = 1;

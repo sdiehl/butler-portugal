@@ -37,7 +37,7 @@ pub mod symmetry;
 pub mod tensor;
 pub mod young_tableaux;
 
-pub use canonicalization::{canonicalize, canonicalize_with_optimizations};
+pub use canonicalization::{canonicalize, canonicalize_with_optimizations, CanonicalizationMethod};
 pub use error::{ButlerPortugalError, Result};
 pub use index::TensorIndex;
 pub use symmetry::Symmetry;

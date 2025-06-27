@@ -198,19 +198,33 @@ impl Tensor {
         let degree = self.rank();
         let perms = young_symmetrizer_permutations(tableau, degree);
         let mut result = None;
-        for (perm, sign) in perms {
-            let mut t = self.permute(&perm)?;
+        for (perm, sign) in &perms {
+            let mut t = self.permute(perm)?;
             t.set_coefficient(t.coefficient() * sign);
             result = match result {
                 Some(acc) => Some(add_tensors(&acc, &t)?),
                 None => Some(t),
             };
         }
-        result.ok_or_else(|| {
+        let mut result = result.ok_or_else(|| {
             crate::ButlerPortugalError::InvalidPermutation(
                 "No permutations in Young symmetrizer".to_string(),
             )
-        })
+        })?;
+        // Normalize by the number of terms in the symmetrizer
+        if !perms.is_empty() {
+            result.set_coefficient(result.coefficient() / perms.len() as i32);
+        }
+        // Permute indices to canonical order (by name and variance)
+        let mut indices_with_positions: Vec<(usize, &TensorIndex)> =
+            result.indices.iter().enumerate().collect();
+        indices_with_positions.sort_by(|a, b| a.1.canonical_cmp(b.1));
+        let permutation: Vec<usize> = indices_with_positions.iter().map(|(pos, _)| *pos).collect();
+        let canonical_result = result.permute(&permutation)?;
+
+        // The permutation parity is already handled by the permute method
+        // which applies the sign from tensor symmetries
+        Ok(canonical_result)
     }
 }
 

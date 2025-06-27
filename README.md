@@ -2,7 +2,15 @@
 
 A Rust implementation of the Butler-Portugal algorithm for tensor canonicalization.
 
-The Butler-Portugal algorithm is a systematic method for bringing tensors into canonical form by applying symmetry operations. We use the double coset approach where a tensor with slot symmetries $S$ and dummy symmetries $D$ is canonicalized by finding the minimal representative in the double coset $D \cdot g \cdot S$. We use the Schreier-Sims algorithm for symmetry group generation.
+The Butler–Portugal algorithm is for bringing tensors with arbitrary symmetries into canonical form. It systematically applies all slot and dummy symmetries by finding a canonical representative in the double coset $D g S$ (where $S$ is the slot symmetry group and $D$ is the dummy index symmetry group), using the Schreier–Sims algorithm to handle large permutation groups and ensure the minimal (canonical) index arrangement is found under all allowed symmetries.
+
+We provide two canonicalization methods:
+
+- **Schreier–Sims (Group-theoretic):**
+  Uses the [Schreier–Sims algorithm](https://en.wikipedia.org/wiki/Schreier%E2%80%93Sims_algorithm) to efficiently enumerate all index permutations allowed by the tensor's symmetries, finding the lexicographically minimal representative. This is the default and most general method.
+
+- **Young Symmetrizer (Tableau-based):**
+  Projects the tensor onto an irreducible symmetry type using a [Young tableau](https://en.wikipedia.org/wiki/Young_tableau), symmetrizing and antisymmetrizing indices according to the tableau's rows and columns. This is useful for explicit irreducible decomposition.
 
 ## Usage
 
