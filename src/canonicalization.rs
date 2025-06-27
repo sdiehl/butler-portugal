@@ -14,7 +14,7 @@ use crate::tensor::Tensor;
 use std::collections::HashSet;
 
 /// Represents a permutation in array form
-type Permutation = Vec<usize>;
+pub type Permutation = Vec<usize>;
 
 /// Represents a base and strong generating set (BSGS)
 #[derive(Debug, Clone)]
