@@ -1,5 +1,5 @@
-[ ] Add tensor pooling for frequently used intermediate results
-[ ] Optimize permutation storage using more compact representations
-[ ] Parallel canonicalization for independent tensor components
-[ ] Early termination in symmetry checks when zero tensors are detected
-[ ] Caching layer for repeated symmetry group computations
+- [ ] Add tensor pooling for frequently used intermediate results
+- [ ] Optimize permutation storage using more compact representations
+- [ ] Parallel canonicalization for independent tensor components
+- [ ] Early termination in symmetry checks when zero tensors are detected
+- [ ] Caching layer for repeated symmetry group computations
