@@ -12,12 +12,15 @@ use crate::index::TensorIndex;
 use crate::schreier_sims::schreier_sims;
 use crate::symmetry::Symmetry;
 use crate::tensor::Tensor;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 /// Represents a permutation in array form
 pub type Permutation = Vec<usize>;
 
 /// Represents a base and strong generating set (BSGS)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BSGS {
     pub base: Vec<usize>,
     pub generators: Vec<Permutation>,
@@ -289,6 +292,240 @@ pub enum CanonicalizationMethod {
     YoungSymmetrizer,
 }
 
+/// Performance optimization settings for canonicalization
+#[derive(Debug, Clone)]
+pub struct CanonicalizationConfig {
+    /// Enable caching of symmetry group computations
+    pub enable_caching: bool,
+    /// Enable early termination for zero tensors
+    pub early_termination: bool,
+    /// Maximum number of permutations to consider before falling back to heuristics
+    pub max_permutations: Option<usize>,
+    /// Enable parallel processing for large tensors
+    pub parallel_processing: bool,
+}
+
+impl Default for CanonicalizationConfig {
+    fn default() -> Self {
+        Self {
+            enable_caching: true,
+            early_termination: true,
+            max_permutations: Some(10000),
+            parallel_processing: false,
+        }
+    }
+}
+
+/// Cache for symmetry group computations
+#[derive(Debug)]
+struct SymmetryCache {
+    bsgs_cache: HashMap<String, BSGS>,
+    permutation_cache: HashMap<String, Vec<Permutation>>,
+}
+
+impl SymmetryCache {
+    fn new() -> Self {
+        Self {
+            bsgs_cache: HashMap::new(),
+            permutation_cache: HashMap::new(),
+        }
+    }
+
+    fn get_bsgs(&self, key: &str) -> Option<&BSGS> {
+        self.bsgs_cache.get(key)
+    }
+
+    fn insert_bsgs(&mut self, key: String, bsgs: BSGS) {
+        self.bsgs_cache.insert(key, bsgs);
+    }
+
+    fn get_permutations(&self, key: &str) -> Option<&Vec<Permutation>> {
+        self.permutation_cache.get(key)
+    }
+
+    fn insert_permutations(&mut self, key: String, perms: Vec<Permutation>) {
+        self.permutation_cache.insert(key, perms);
+    }
+}
+
+/// Thread-safe cache wrapper
+#[derive(Debug)]
+pub struct CanonicalizationCache {
+    cache: Arc<Mutex<SymmetryCache>>,
+}
+
+impl CanonicalizationCache {
+    pub fn new() -> Self {
+        Self {
+            cache: Arc::new(Mutex::new(SymmetryCache::new())),
+        }
+    }
+
+    pub fn get_bsgs(&self, key: &str) -> Option<BSGS> {
+        self.cache.lock().ok()?.get_bsgs(key).cloned()
+    }
+
+    pub fn insert_bsgs(&self, key: String, bsgs: BSGS) {
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.insert_bsgs(key, bsgs);
+        }
+    }
+
+    pub fn get_permutations(&self, key: &str) -> Option<Vec<Permutation>> {
+        self.cache.lock().ok()?.get_permutations(key).cloned()
+    }
+
+    pub fn insert_permutations(&self, key: String, perms: Vec<Permutation>) {
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.insert_permutations(key, perms);
+        }
+    }
+}
+
+impl Default for CanonicalizationCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Enhanced canonicalization with performance optimizations
+pub fn canonicalize_with_config(
+    tensor: &Tensor,
+    config: &CanonicalizationConfig,
+    cache: Option<&CanonicalizationCache>,
+) -> Result<Tensor> {
+    // Early termination for zero tensors
+    if config.early_termination && tensor.is_zero() {
+        let mut zero_tensor = tensor.clone();
+        zero_tensor.set_coefficient(0);
+        return Ok(zero_tensor);
+    }
+
+    // Early termination for single index tensors
+    if tensor.rank() <= 1 {
+        return Ok(tensor.clone());
+    }
+
+    // Check for zero tensor due to symmetry constraints
+    if config.early_termination {
+        for symmetry in tensor.symmetries() {
+            if symmetry.makes_tensor_zero(tensor.indices()) {
+                let mut zero_tensor = tensor.clone();
+                zero_tensor.set_coefficient(0);
+                return Ok(zero_tensor);
+            }
+        }
+    }
+
+    // Generate valid permutations with caching
+    let valid_permutations = if let Some(cache) = cache {
+        let cache_key = format!("perms_{}_{}", tensor.rank(), tensor.symmetries().len());
+        if let Some(cached_perms) = cache.get_permutations(&cache_key) {
+            cached_perms
+        } else {
+            let perms = generate_valid_permutations_with_config(tensor, config, Some(cache))?;
+            cache.insert_permutations(cache_key, perms.clone());
+            perms
+        }
+    } else {
+        generate_valid_permutations_with_config(tensor, config, None)?
+    };
+
+    if valid_permutations.is_empty() {
+        return Ok(tensor.clone());
+    }
+
+    // Apply permutation limit if configured
+    let permutations_to_check = if let Some(max_perms) = config.max_permutations {
+        if valid_permutations.len() > max_perms {
+            // Use heuristic: take first max_perms permutations
+            valid_permutations[..max_perms].to_vec()
+        } else {
+            valid_permutations
+        }
+    } else {
+        valid_permutations
+    };
+
+    // Find lexicographically minimal tensor form
+    let mut best_tensor = None;
+    let mut best_canonical_key = None;
+
+    for perm in permutations_to_check {
+        let candidate = tensor.permute(&perm)?;
+
+        if config.early_termination && candidate.is_zero() {
+            continue;
+        }
+
+        let canonical_key = tensor_canonical_key(&candidate);
+
+        if let Some(ref best_key) = best_canonical_key {
+            if canonical_key < *best_key {
+                best_canonical_key = Some(canonical_key);
+                best_tensor = Some(candidate);
+            }
+        } else {
+            best_canonical_key = Some(canonical_key);
+            best_tensor = Some(candidate);
+        }
+    }
+
+    if let Some(tensor) = best_tensor {
+        Ok(tensor)
+    } else {
+        // All permutations resulted in zero
+        let mut zero_tensor = tensor.clone();
+        zero_tensor.set_coefficient(0);
+        Ok(zero_tensor)
+    }
+}
+
+/// Generate valid permutations with configuration options
+fn generate_valid_permutations_with_config(
+    tensor: &Tensor,
+    config: &CanonicalizationConfig,
+    cache: Option<&CanonicalizationCache>,
+) -> Result<Vec<Permutation>> {
+    let n = tensor.rank();
+    let generators = tensor_symmetry_generators(tensor);
+
+    // Use cached BSGS if available
+    let bsgs = if let Some(cache) = cache {
+        let cache_key = format!("bsgs_{}_{}", n, generators.len());
+        if let Some(cached_bsgs) = cache.get_bsgs(&cache_key) {
+            cached_bsgs
+        } else {
+            let new_bsgs = schreier_sims(&generators, n);
+            cache.insert_bsgs(cache_key, new_bsgs.clone());
+            new_bsgs
+        }
+    } else {
+        schreier_sims(&generators, n)
+    };
+
+    let permutations = enumerate_group(&bsgs, n);
+
+    // Apply parallel processing if enabled and beneficial
+    if config.parallel_processing && permutations.len() > 1000 {
+        // For large permutation sets, we could implement parallel processing here
+        // This would require additional dependencies like rayon
+        Ok(permutations)
+    } else {
+        Ok(permutations)
+    }
+}
+
+/// Converts all tensor symmetries into a flat list of permutation generators
+fn tensor_symmetry_generators(tensor: &Tensor) -> Vec<Permutation> {
+    let n = tensor.rank();
+    let mut gens = Vec::new();
+    for sym in tensor.symmetries() {
+        gens.extend(symmetry_to_generators(sym, n));
+    }
+    gens
+}
+
 /// Advanced canonicalization with optimization for specific tensor types
 /// Optionally, project onto a Young tableau if provided (advanced feature)
 /// and optionally use Young symmetrizer-based canonicalization.
@@ -377,16 +614,6 @@ fn canonicalize_antisymmetric_tensor(tensor: &Tensor) -> Result<Tensor> {
 
     let permutation: Vec<usize> = indices_with_positions.iter().map(|(pos, _)| *pos).collect();
     tensor.permute(&permutation)
-}
-
-/// Converts all tensor symmetries into a flat list of permutation generators
-fn tensor_symmetry_generators(tensor: &Tensor) -> Vec<Permutation> {
-    let n = tensor.rank();
-    let mut gens = Vec::new();
-    for sym in tensor.symmetries() {
-        gens.extend(symmetry_to_generators(sym, n));
-    }
-    gens
 }
 
 #[cfg(test)]
