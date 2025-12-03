@@ -42,6 +42,7 @@ harness = false
 name = "butler_portugal"
 path = "src/lib.rs"
 doctest = true
+crate-type = ["rlib", "cdylib"]
 
 [package.metadata.docs.rs]
 all-features = true

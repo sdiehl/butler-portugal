@@ -11,12 +11,25 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
+
     - name: Build
       run: cargo build --verbose
+
     - name: Run tests
       run: cargo test --verbose
+
+    - name: Build release (cdylib)
+      run: cargo build --release
+
+    - name: Compile C example
+      run: |
+        clang -I./include -L./target/release -lbutler_portugal \
+          -o target/release/c_example examples/c/example.c
+
+    - name: Run C example
+      run: |
+        LD_LIBRARY_PATH=./target/release ./target/release/c_example

@@ -31,6 +31,7 @@
 
 pub mod canonicalization;
 pub mod error;
+pub mod ffi;
 pub mod index;
 pub mod schreier_sims;
 pub mod symmetry;
