@@ -147,8 +147,8 @@ pub fn rsk(word: &[usize]) -> (SemistandardTableau, StandardTableau) {
     // Simple RSK implementation (not optimized)
     let mut p_rows: Vec<Vec<usize>> = Vec::new();
     let mut q_rows: Vec<Vec<usize>> = Vec::new();
-    let mut next_label = 1;
-    for &x in word {
+    for (idx, &x) in word.iter().enumerate() {
+        let next_label = idx + 1;
         let mut i = 0;
         let mut to_insert = x;
         loop {
@@ -168,7 +168,6 @@ pub fn rsk(word: &[usize]) -> (SemistandardTableau, StandardTableau) {
                 break;
             }
         }
-        next_label += 1;
     }
     let shape = Shape(p_rows.iter().map(|r| r.len()).collect());
     let p = SemistandardTableau {

@@ -1,7 +1,7 @@
-//! Basic usage examples for the Butler-Portugal library
+//! Basic usage examples
 //!
-//! This example demonstrates how to use the library for common
-//! tensor canonicalization tasks in theoretical physics.
+//! Demonstrates how to use the library for common tensor
+//! canonicalization tasks in physics.
 
 use butler_portugal::*;
 

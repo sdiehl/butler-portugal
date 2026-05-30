@@ -26,21 +26,21 @@ For example usage, see the [basic.rs](examples/basic.rs) example.
 
 The Riemann curvature tensor $R_{\mu\nu\rho\sigma}$ satisfies the following symmetries:
 
-1.  **Antisymmetry in the first two indices:**
+1. **Antisymmetry in the first two indices:**
 
-    $$R_{\mu\nu\rho\sigma} = -R_{\nu\mu\rho\sigma}$$
+   $$R_{\mu\nu\rho\sigma} = -R_{\nu\mu\rho\sigma}$$
 
-2.  **Antisymmetry in the last two indices:**
+2. **Antisymmetry in the last two indices:**
 
-    $$R_{\mu\nu\rho\sigma} = -R_{\mu\nu\sigma\rho}$$
+   $$R_{\mu\nu\rho\sigma} = -R_{\mu\nu\sigma\rho}$$
 
-3.  **Pairwise interchange symmetry:**
+3. **Pairwise interchange symmetry:**
 
-    $$R_{\mu\nu\rho\sigma} = R_{\rho\sigma\mu\nu}$$
+   $$R_{\mu\nu\rho\sigma} = R_{\rho\sigma\mu\nu}$$
 
-4.  **First Bianchi Identity (cyclic symmetry on the first three indices):**
+4. **First Bianchi Identity (cyclic symmetry on the first three indices):**
 
-    $$R_{\mu\nu\rho\sigma} + R_{\mu\rho\sigma\nu} + R_{\mu\sigma\nu\rho} = 0$$
+   $$R_{\mu\nu\rho\sigma} + R_{\mu\rho\sigma\nu} + R_{\mu\sigma\nu\rho} = 0$$
 
 We can use the crate to canonicalize the Riemann tensor:
 
@@ -69,6 +69,9 @@ let canonical = canonicalize(&riemann);
 
 ## References
 
+1. Portugal, R. (1999). Algorithmic simplification of tensor expressions. Journal of Physics A: Mathematical and General, 32(44), 7779.
+1. Manssur, L. R., Portugal, R., & Svaiter, B. F. (2002). Group-theoretic approach for symbolic tensor manipulation. International Journal of Modern Physics C, 13(07), 859-879.
+1. Manssur, L. R. U., & Portugal, R. (2001). Group-theoretic Approach for Symbolic Tensor Manipulation: II. Dummy Indices. arXiv preprint math-ph/0107032.
 1. Martin-García, J. M. (2008). xPerm: Fast index canonicalization for tensor computer algebra. Computer Physics Communications, 179(8), 597–603.
 1. Niehoff, B. E. (2018). Faster tensor canonicalization. Computer Physics Communications, 228, 123-145.
 1. Niehoff, B. (2017). Efficient algorithms for tensor canonicalization with general index symmetries. Computer Physics Communications, 220, 1–9.

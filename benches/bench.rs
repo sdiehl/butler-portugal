@@ -3,9 +3,11 @@
 //! This benchmark suite tests the performance of the Butler-Portugal algorithm
 //! on various complex tensor types commonly encountered in theoretical physics,
 //! including general relativity, quantum field theory, and string theory.
+#![allow(clippy::unwrap_used)]
 
 use butler_portugal::*;
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
 
 /// Benchmark simple symmetric and antisymmetric tensors
 fn bench_basic_symmetries(c: &mut Criterion) {
@@ -286,7 +288,14 @@ fn bench_optimization_comparison(c: &mut Criterion) {
     group.bench_function("optimized_canonicalization", |b| {
         b.iter(|| {
             let riemann = riemann_setup();
-            black_box(canonicalize_with_optimizations(&riemann).unwrap())
+            black_box(
+                canonicalize_with_optimizations(
+                    &riemann,
+                    None,
+                    &CanonicalizationMethod::SchreierSims,
+                )
+                .unwrap(),
+            )
         })
     });
 

@@ -1,29 +1,29 @@
 [package]
 name = "butler-portugal"
-version = "0.1.3"
-edition = "2021"
+version = "0.1.4"
 authors = ["Stephen Diehl"]
-description = "A Rust library implementing the Butler-Portugal algorithm for tensor canonicalization"
+categories = ["science", "mathematics"]
+documentation = "https://docs.rs/butler-portugal"
+edition = "2021"
+exclude = [
+  ".github/**/*",
+]
+homepage = "https://github.com/sdiehl/butler-portugal"
+include = [
+  "src/**/*",
+  "examples/**/*",
+  "tests/**/*",
+  "benches/**/*",
+  "README.md",
+  "LICENSE",
+  "Cargo.toml",
+]
+keywords = ["physics", "tensor", "canonicalization", "symmetry", "relativity"]
+license = "MIT"
 readme = "README.md"
 repository = "https://github.com/sdiehl/butler-portugal"
-homepage = "https://github.com/sdiehl/butler-portugal"
-documentation = "https://docs.rs/butler-portugal"
-license = "MIT"
-keywords = ["physics", "tensor", "canonicalization", "symmetry", "relativity"]
-categories = ["science", "mathematics"]
 rust-version = "1.70.0"
-include = [
-    "src/**/*",
-    "examples/**/*",
-    "tests/**/*",
-    "benches/**/*",
-    "README.md",
-    "LICENSE",
-    "Cargo.toml",
-]
-exclude = [
-    ".github/**/*",
-]
+description = "A Rust library implementing the Butler-Portugal algorithm for tensor canonicalization"
 
 [dependencies]
 itertools = "0.14.0"
