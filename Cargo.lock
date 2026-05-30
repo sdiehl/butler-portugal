@@ -46,7 +46,7 @@ checksum = "793db76d6187cd04dff33004d8e6c9cc4e05cd330500379d2394209271b4aeee"
 
 [[package]]
 name = "butler-portugal"
-version = "0.1.4"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "itertools 0.14.0",
