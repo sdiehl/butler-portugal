@@ -26,7 +26,7 @@ rust-version = "1.70.0"
 description = "A Rust library implementing the Butler-Portugal algorithm for tensor canonicalization"
 
 [dependencies]
-itertools = "0.14.0"
+itertools = "0.15.0"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
