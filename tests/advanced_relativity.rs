@@ -6,7 +6,6 @@
 use butler_portugal::*;
 
 #[test]
-#[ignore] // TODO: Fix lexicographic ordering for complex cases
 fn test_newman_penrose_spin_coefficients() {
     // Newman-Penrose spin coefficients in tetrad formalism
     // Test various spin coefficient symmetries
@@ -26,14 +25,11 @@ fn test_newman_penrose_spin_coefficients() {
 }
 
 #[test]
-#[ignore] // TODO: Test expectation may be incorrect - algorithm correctly finds lexicographically minimal form
 fn test_cotton_tensor_symmetries() {
     // Cotton tensor C_abc in 3D gravity
     // Antisymmetric in first two indices and traceless
     //
-    // NOTE: The test expects ["a", "b", "c"] but the algorithm correctly produces ["b", "c", "a"]
-    // because only indices 0,1 can be swapped (antisymmetric), so index 2 ("a") cannot move to front.
-    // The lexicographically smallest valid form is indeed ["b", "c", "a"].
+    // Only slots 0 and 1 can be swapped, so "a" stays in the last slot.
 
     let mut cotton = Tensor::new(
         "Cotton",
@@ -49,10 +45,10 @@ fn test_cotton_tensor_symmetries() {
     let canonical = canonicalize(&cotton).unwrap();
 
     // The algorithm correctly produces the lexicographically minimal form among valid permutations
-    assert_eq!(canonical.indices()[0].name(), "b"); // Correct result
+    assert_eq!(canonical.indices()[0].name(), "b");
     assert_eq!(canonical.indices()[1].name(), "c");
     assert_eq!(canonical.indices()[2].name(), "a");
-    assert_eq!(canonical.coefficient(), -1); // Due to antisymmetric swap
+    assert_eq!(canonical.coefficient(), -1);
 }
 
 #[test]
@@ -169,7 +165,6 @@ fn test_ads_isometry_killing_vectors() {
 }
 
 #[test]
-#[ignore] // TODO: Fix lexicographic ordering for complex cases
 fn test_conformal_killing_tensor() {
     // Conformal Killing tensor ∇_(a C_bc) = g_(ab) φ_c + permutations
 
@@ -184,10 +179,12 @@ fn test_conformal_killing_tensor() {
 
     conf_killing.add_symmetry(Symmetry::symmetric(vec![0, 1]));
 
+    // Only slots 0 and 1 can be swapped, so "a" stays in the last slot.
     let canonical = canonicalize(&conf_killing).unwrap();
-    assert_eq!(canonical.indices()[0].name(), "a");
-    assert_eq!(canonical.indices()[1].name(), "b");
-    assert_eq!(canonical.indices()[2].name(), "c");
+    assert_eq!(canonical.indices()[0].name(), "b");
+    assert_eq!(canonical.indices()[1].name(), "c");
+    assert_eq!(canonical.indices()[2].name(), "a");
+    assert_eq!(canonical.coefficient(), 1);
 }
 
 #[test]
@@ -297,7 +294,6 @@ fn test_holographic_stress_tensor() {
 }
 
 #[test]
-#[ignore] // TODO: Fix lexicographic ordering for complex cases
 fn test_kaluza_klein_field_strength() {
     // Kaluza-Klein field strength in higher dimensions
 

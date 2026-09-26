@@ -1,5 +1,6 @@
 - [ ] Add tensor pooling for frequently used intermediate results
 - [ ] Optimize permutation storage using more compact representations
-- [ ] Parallel canonicalization for independent tensor components
-- [ ] Early termination in symmetry checks when zero tensors are detected
-- [ ] Caching layer for repeated symmetry group computations
+- [x] Parallel canonicalization for independent tensor components (`parallel` feature)
+- [x] Early termination in symmetry checks when zero tensors are detected
+- [x] Caching layer for repeated symmetry group computations (`SlotGroup::canonicalize`)
+- [ ] Dummy index renaming and double coset search (full Butler-Portugal)

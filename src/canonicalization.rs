@@ -14,7 +14,7 @@
 //! Dummy (contracted) index renaming is not modelled. Only slot symmetries are
 //! applied.
 
-use crate::error::Result;
+use crate::error::{ButlerPortugalError, Result};
 use crate::index::TensorIndex;
 use crate::permutation::{compose, identity, is_identity, Permutation};
 use crate::schreier_sims::{schreier_sims, BSGS};
@@ -76,6 +76,20 @@ impl SlotGroup {
         } else {
             None
         }
+    }
+
+    /// Canonicalizes `tensor` with this group instead of rebuilding it, which
+    /// is most of the cost of [`canonicalize`]. The tensor's own symmetries are
+    /// ignored; only its rank is checked.
+    pub fn canonicalize(&self, tensor: &Tensor) -> Result<Tensor> {
+        if tensor.rank() != self.rank {
+            return Err(ButlerPortugalError::IncompatibleTensors(format!(
+                "group has rank {} but tensor has rank {}",
+                self.rank,
+                tensor.rank()
+            )));
+        }
+        Ok(canonicalize_in(tensor, self))
     }
 
     /// Every signed slot permutation in the group.
@@ -290,6 +304,27 @@ mod tests {
         );
         t.add_symmetry(Symmetry::symmetric(vec![0, 1]));
         assert_eq!(canonicalize(&t).unwrap().to_string(), "S_a^a");
+    }
+
+    #[test]
+    fn reused_group_matches_fresh_canonicalization() {
+        let mut template = tensor("R", &["a", "b", "c", "d"]);
+        template.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
+        template.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
+        template.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
+        let group = template.slot_group().unwrap();
+        for names in [
+            ["d", "c", "b", "a"],
+            ["b", "a", "c", "d"],
+            ["a", "b", "a", "b"],
+        ] {
+            let mut t = tensor("R", &names);
+            t.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
+            t.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
+            t.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
+            assert_eq!(group.canonicalize(&t).unwrap(), canonicalize(&t).unwrap());
+        }
+        assert!(group.canonicalize(&tensor("T", &["a"])).is_err());
     }
 
     #[test]

@@ -63,6 +63,8 @@ assert_eq!(group.sign(&[1, 0, 2, 3]), Some(-1));
 assert_eq!(group.sign(&[0, 2, 1, 3]), None);
 ```
 
+Building the group is most of the cost of `canonicalize`, so when many tensors share the same symmetries build it once and call `group.canonicalize(&tensor)` on each.
+
 ## Young symmetrizers
 
 `Tensor::project_with_tableau` applies the Young symmetrizer of a standard tableau (symmetrize rows, then antisymmetrize columns) and returns the resulting sum as a list of distinct canonical tensors with integer coefficients. Projecting the Riemann tensor onto the window tableau gives the familiar three-term combination, and projecting it onto a single row gives nothing:

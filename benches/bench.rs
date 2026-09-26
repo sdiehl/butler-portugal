@@ -291,6 +291,12 @@ fn bench_group_construction(c: &mut Criterion) {
         })
     });
 
+    group.bench_function("reused_group", |b| {
+        let riemann = riemann_setup();
+        let slot_group = SlotGroup::new(&riemann).unwrap();
+        b.iter(|| black_box(slot_group.canonicalize(&riemann).unwrap()))
+    });
+
     group.bench_function("fully_symmetric_rank_12", |b| {
         b.iter(|| {
             let indices: Vec<TensorIndex> = (0..12)

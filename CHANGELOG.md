@@ -25,6 +25,8 @@ Finish Schreier-Sims. Canonicalization now runs on a signed permutation group.
 - `swap_indices` returns `0` when the tensor vanishes.
 - Regression tests for every fixed defect and group order checks.
 - Optional `parallel` feature: rayon parallelizes Young projection.
+- `SlotGroup::canonicalize` reuses one group across many tensors.
+- Four ignored relativity tests now run with correct expectations.
 
 ## 0.2.0 (2026-05-30)
 
