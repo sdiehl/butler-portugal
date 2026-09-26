@@ -255,11 +255,10 @@ fn bench_advanced_physics_tensors(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark optimization paths comparison
-fn bench_optimization_comparison(c: &mut Criterion) {
-    let mut group = c.benchmark_group("optimization_comparison");
+/// Benchmark group construction against a full canonicalization
+fn bench_group_construction(c: &mut Criterion) {
+    let mut group = c.benchmark_group("group_construction");
 
-    // Compare standard vs optimized canonicalization for Riemann tensor
     let riemann_setup = || {
         let mut riemann = Tensor::new(
             "R",
@@ -278,24 +277,29 @@ fn bench_optimization_comparison(c: &mut Criterion) {
         riemann
     };
 
-    group.bench_function("standard_canonicalization", |b| {
+    group.bench_function("schreier_sims_only", |b| {
+        b.iter(|| {
+            let riemann = riemann_setup();
+            black_box(SlotGroup::new(&riemann).unwrap())
+        })
+    });
+
+    group.bench_function("full_canonicalization", |b| {
         b.iter(|| {
             let riemann = riemann_setup();
             black_box(canonicalize(&riemann).unwrap())
         })
     });
 
-    group.bench_function("optimized_canonicalization", |b| {
+    group.bench_function("fully_symmetric_rank_12", |b| {
         b.iter(|| {
-            let riemann = riemann_setup();
-            black_box(
-                canonicalize_with_optimizations(
-                    &riemann,
-                    None,
-                    &CanonicalizationMethod::SchreierSims,
-                )
-                .unwrap(),
-            )
+            let indices: Vec<TensorIndex> = (0..12)
+                .rev()
+                .map(|i| TensorIndex::new(&format!("i{i:02}"), i))
+                .collect();
+            let mut tensor = Tensor::new("S", indices);
+            tensor.add_symmetry(Symmetry::symmetric((0..12).collect()));
+            black_box(canonicalize(&tensor).unwrap())
         })
     });
 
@@ -366,7 +370,7 @@ criterion_group!(
     bench_mixed_variance_tensors,
     bench_complex_multi_symmetry,
     bench_advanced_physics_tensors,
-    bench_optimization_comparison,
+    bench_group_construction,
     bench_comprehensive_suite
 );
 

@@ -1,31 +1,32 @@
 //! # Butler-Portugal Tensor Canonicalization Library
 //!
-//! This library implements the Butler-Portugal algorithm for tensor canonicalization
-//! in theoretical physics applications. The algorithm systematically applies symmetry
-//! operations to bring tensors into canonical form.
+//! Brings tensors with slot symmetries into a canonical form: the
+//! lexicographically smallest index arrangement reachable by the symmetries,
+//! with the accumulated sign folded into the coefficient. The symmetries are
+//! handled as a signed permutation group through the Schreier-Sims algorithm,
+//! so large symmetry groups never need to be enumerated.
 //!
 //! ## Example
 //! ```rust
 //! use butler_portugal::{canonicalize, Symmetry, Tensor, TensorIndex};
 //!
-//! // Create a tensor with some indices
 //! let mut tensor = Tensor::new(
 //!     "R",
 //!     vec![
-//!         TensorIndex::new("a", 0),
-//!         TensorIndex::new("b", 1),
-//!         TensorIndex::new("c", 2),
-//!         TensorIndex::new("d", 3),
+//!         TensorIndex::new("b", 0),
+//!         TensorIndex::new("a", 1),
+//!         TensorIndex::new("d", 2),
+//!         TensorIndex::new("c", 3),
 //!     ],
 //! );
 //!
-//! // Add symmetry properties (Riemann tensor symmetries)
+//! // Riemann tensor symmetries
 //! tensor.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
 //! tensor.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
 //! tensor.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
 //!
-//! // Canonicalize the tensor
-//! let canonical_tensor = canonicalize(&tensor)?;
+//! let canonical = canonicalize(&tensor)?;
+//! assert_eq!(canonical.to_string(), "R_a_b_c_d");
 //! # Ok::<(), butler_portugal::ButlerPortugalError>(())
 //! ```
 
@@ -33,40 +34,14 @@ pub mod canonicalization;
 pub mod error;
 pub mod ffi;
 pub mod index;
+pub mod permutation;
 pub mod schreier_sims;
 pub mod symmetry;
 pub mod tensor;
 pub mod young_tableaux;
 
-pub use canonicalization::{canonicalize, canonicalize_with_optimizations, CanonicalizationMethod};
+pub use canonicalization::{canonicalize, SlotGroup};
 pub use error::{ButlerPortugalError, Result};
 pub use index::TensorIndex;
 pub use symmetry::Symmetry;
 pub use tensor::Tensor;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_basic_tensor_creation() {
-        let tensor = Tensor::new(
-            "T",
-            vec![TensorIndex::new("i", 0), TensorIndex::new("j", 1)],
-        );
-
-        assert_eq!(tensor.name(), "T");
-        assert_eq!(tensor.indices().len(), 2);
-    }
-
-    #[test]
-    fn test_symmetry_application() {
-        let mut tensor = Tensor::new(
-            "S",
-            vec![TensorIndex::new("a", 0), TensorIndex::new("b", 1)],
-        );
-
-        tensor.add_symmetry(Symmetry::symmetric(vec![0, 1]));
-        assert_eq!(tensor.symmetries().len(), 1);
-    }
-}

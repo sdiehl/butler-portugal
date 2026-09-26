@@ -1,10 +1,7 @@
 //! Stress tests for tensor canonicalization at scale
 
 use butler_portugal::young_tableaux::{Shape, StandardTableau};
-use butler_portugal::{
-    canonicalize, canonicalize_with_optimizations, CanonicalizationMethod, Symmetry, Tensor,
-    TensorIndex,
-};
+use butler_portugal::{canonicalize, Symmetry, Tensor, TensorIndex};
 use std::time::Instant;
 
 /// Creates a large tensor with many indices for stress testing
@@ -182,60 +179,70 @@ fn test_large_cyclic_tensor_stress() {
     let duration = start.elapsed();
     println!("Large cyclic tensor canonicalization took: {duration:?}");
 
-    // For cyclic tensors, verify that the result is a valid tensor
-    assert_eq!(result.rank(), rank, "Result should have the same rank");
-    assert!(!result.is_zero(), "Result should not be zero");
+    // The input is already sorted, so it must come back unchanged
+    assert_eq!(result, tensor);
 
-    // Print the result for inspection
-    let indices: Vec<_> = result.indices().iter().map(|i| i.name()).collect();
-    println!("Canonical result indices: {indices:?}");
+    // Rotating each block of three by one slot must canonicalize back to it
+    let mut rotated = create_large_cyclic_tensor(rank, "C");
+    for i in (0..rank).step_by(3) {
+        rotated.indices_mut()[i..i + 3].rotate_left(1);
+    }
+    assert_eq!(
+        canonicalize(&rotated).expect("Canonicalization failed"),
+        tensor
+    );
 }
 
-/// Stress test comparing both canonicalization methods
+/// Full symmetric and antisymmetric groups on many slots
 #[test]
-fn test_canonicalization_methods_comparison() {
-    let rank = 8;
+fn test_full_symmetry_groups() {
+    let rank = 12;
+    let mut tensor = create_large_tensor(rank, "S");
+    tensor.indices_mut().reverse();
+    tensor.add_symmetry(Symmetry::symmetric((0..rank).collect()));
+
+    let start = Instant::now();
+    let result = canonicalize(&tensor).expect("Canonicalization failed");
+    println!(
+        "Rank {rank} fully symmetric canonicalization took: {:?}",
+        start.elapsed()
+    );
+
+    let names: Vec<_> = result.indices().iter().map(|i| i.name()).collect();
+    let mut expected = names.clone();
+    expected.sort();
+    assert_eq!(names, expected, "Names should be in lexicographic order");
+    assert_eq!(result.coefficient(), 1);
+
+    let rank = 10;
+    let mut tensor = create_large_tensor(rank, "A");
+    tensor.indices_mut().reverse();
+    tensor.add_symmetry(Symmetry::antisymmetric((0..rank).collect()));
+
+    let result = canonicalize(&tensor).expect("Canonicalization failed");
+    assert_eq!(result.indices(), create_large_tensor(rank, "A").indices());
+    assert_eq!(
+        result.coefficient(),
+        -1,
+        "Reversing ten slots is an odd permutation"
+    );
+}
+
+/// Young projection over many terms
+#[test]
+fn test_young_projection_stress() {
+    let rank = 6;
     let tensor = create_large_mixed_symmetry_tensor(rank, "T");
 
-    println!("Comparing canonicalization methods for tensor with rank {rank}");
-
-    // Test Schreier-Sims method
-    let start = Instant::now();
-    let schreier_result =
-        canonicalize_with_optimizations(&tensor, None, &CanonicalizationMethod::SchreierSims)
-            .expect("Schreier-Sims canonicalization failed");
-    let schreier_duration = start.elapsed();
-
-    // Test Young symmetrizer method with symmetric tableau
+    // Full symmetrization kills a tensor with an antisymmetric pair
     let shape = Shape(vec![rank]);
     let tableau = StandardTableau::new(shape, vec![(1..=rank).collect()]).unwrap();
     let start = Instant::now();
-    let young_result = canonicalize_with_optimizations(
-        &tensor,
-        Some(&tableau),
-        &CanonicalizationMethod::YoungSymmetrizer,
-    )
-    .expect("Young symmetrizer canonicalization failed");
-    let young_duration = start.elapsed();
-
-    println!("Schreier-Sims took: {schreier_duration:?}");
-    println!("Young symmetrizer took: {young_duration:?}");
-
-    // Both methods should produce canonical results
-    let schreier_indices: Vec<_> = schreier_result.indices().iter().map(|i| i.name()).collect();
-    let young_indices: Vec<_> = young_result.indices().iter().map(|i| i.name()).collect();
-
-    let mut sorted_indices = schreier_indices.clone();
-    sorted_indices.sort();
-
-    assert_eq!(
-        schreier_indices, sorted_indices,
-        "Schreier-Sims result should be canonical"
-    );
-    assert_eq!(
-        young_indices, sorted_indices,
-        "Young symmetrizer result should be canonical"
-    );
+    let terms = tensor
+        .project_with_tableau(&tableau)
+        .expect("Young projection failed");
+    println!("Rank {rank} Young projection took: {:?}", start.elapsed());
+    assert!(terms.is_empty());
 }
 
 /// Stress test for very large tensor (if system can handle it)

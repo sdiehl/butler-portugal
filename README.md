@@ -1,48 +1,26 @@
 # Butler-Portugal
 
-A Rust implementation of the Butler-Portugal algorithm for tensor canonicalization.
+A Rust library for bringing tensors with slot symmetries into canonical form.
 
-The Butler–Portugal algorithm is for bringing tensors with arbitrary symmetries into canonical form. It systematically applies all slot and dummy symmetries by finding a canonical representative in the double coset $D g S$ (where $S$ is the slot symmetry group and $D$ is the dummy index symmetry group), using the Schreier–Sims algorithm to handle large permutation groups and ensure the minimal (canonical) index arrangement is found under all allowed symmetries.
+Given a tensor such as the Riemann tensor $R_{\mu\nu\rho\sigma}$ and its slot symmetries, the library finds the lexicographically smallest index arrangement reachable by those symmetries and folds the accumulated sign into the coefficient. Tensors that vanish by symmetry, for example an antisymmetric pair carrying the same index name or a slot that is both symmetric and antisymmetric with another, come back with coefficient zero.
 
-We provide two canonicalization methods:
+The symmetries are treated as a group of signed permutations of the slots. The library builds a base and strong generating set for that group with the [Schreier-Sims algorithm](https://en.wikipedia.org/wiki/Schreier%E2%80%93Sims_algorithm) and walks the resulting stabilizer chain slot by slot to find the minimum, so the group is never enumerated. A fully symmetric rank 12 tensor, whose group has $12!$ elements, canonicalizes in about a millisecond.
 
-- **Schreier–Sims (Group-theoretic):**
-  Uses the [Schreier–Sims algorithm](https://en.wikipedia.org/wiki/Schreier%E2%80%93Sims_algorithm) to efficiently enumerate all index permutations allowed by the tensor's symmetries, finding the lexicographically minimal representative. This is the default and most general method.
-
-- **Young Symmetrizer (Tableau-based):**
-  Projects the tensor onto an irreducible symmetry type using a [Young tableau](https://en.wikipedia.org/wiki/Young_tableau), symmetrizing and antisymmetrizing indices according to the tableau's rows and columns. This is useful for explicit irreducible decomposition.
+Only slot symmetries are handled. Renaming of contracted (dummy) indices, and hence the double coset search of the full Butler-Portugal algorithm, is not implemented.
 
 ## Usage
-
-To add the crate to your project, run:
 
 ```bash
 cargo add butler-portugal
 ```
 
-For example usage, see the [basic.rs](examples/basic.rs) example.
+For a longer walkthrough see [examples/basic.rs](examples/basic.rs).
 
 ## Example
 
-The Riemann curvature tensor $R_{\mu\nu\rho\sigma}$ satisfies the following symmetries:
+The Riemann tensor is antisymmetric in each pair of slots and symmetric under exchange of the two pairs:
 
-1. **Antisymmetry in the first two indices:**
-
-   $$R_{\mu\nu\rho\sigma} = -R_{\nu\mu\rho\sigma}$$
-
-2. **Antisymmetry in the last two indices:**
-
-   $$R_{\mu\nu\rho\sigma} = -R_{\mu\nu\sigma\rho}$$
-
-3. **Pairwise interchange symmetry:**
-
-   $$R_{\mu\nu\rho\sigma} = R_{\rho\sigma\mu\nu}$$
-
-4. **First Bianchi Identity (cyclic symmetry on the first three indices):**
-
-   $$R_{\mu\nu\rho\sigma} + R_{\mu\rho\sigma\nu} + R_{\mu\sigma\nu\rho} = 0$$
-
-We can use the crate to canonicalize the Riemann tensor:
+$$R_{\mu\nu\rho\sigma} = -R_{\nu\mu\rho\sigma} = -R_{\mu\nu\sigma\rho} = R_{\rho\sigma\mu\nu}$$
 
 ```rust
 use butler_portugal::*;
@@ -50,35 +28,66 @@ use butler_portugal::*;
 let mut riemann = Tensor::new(
     "R",
     vec![
-        TensorIndex::new("mu", 0),
-        TensorIndex::new("nu", 1),
-        TensorIndex::new("rho", 2),
-        TensorIndex::new("sigma", 3),
+        TensorIndex::new("sigma", 0),
+        TensorIndex::new("rho", 1),
+        TensorIndex::new("nu", 2),
+        TensorIndex::new("mu", 3),
     ],
 );
 
-// Antisymmetry in first pair
 riemann.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
-// Antisymmetry in second pair
 riemann.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
-// Symmetric exchange of pairs
 riemann.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
 
-let canonical = canonicalize(&riemann);
+let canonical = canonicalize(&riemann).unwrap();
+assert_eq!(canonical.to_string(), "R_mu_nu_rho_sigma");
+```
+
+Indices are ordered by name, then covariant before contravariant. Symmetries can be declared as `symmetric`, `antisymmetric`, `symmetric_pairs` (exchange of whole pairs, implying nothing about the order inside a pair), `cyclic`, or `custom` (explicit signed generators).
+
+## Group queries
+
+`SlotGroup` exposes the signed symmetry group directly:
+
+```rust
+use butler_portugal::*;
+
+let mut r = Tensor::new("R", (0..4).map(|i| TensorIndex::new("a", i)).collect());
+r.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
+r.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
+r.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
+
+let group = SlotGroup::new(&r).unwrap();
+assert_eq!(group.order(), 8);
+assert_eq!(group.sign(&[1, 0, 2, 3]), Some(-1));
+assert_eq!(group.sign(&[0, 2, 1, 3]), None);
+```
+
+## Young symmetrizers
+
+`Tensor::project_with_tableau` applies the Young symmetrizer of a standard tableau (symmetrize rows, then antisymmetrize columns) and returns the resulting sum as a list of distinct canonical tensors with integer coefficients. Projecting the Riemann tensor onto the window tableau gives the familiar three-term combination, and projecting it onto a single row gives nothing:
+
+```rust
+use butler_portugal::young_tableaux::{Shape, StandardTableau};
+use butler_portugal::*;
+
+let mut r = Tensor::new("R", ["a", "b", "c", "d"].iter().enumerate().map(|(i, n)| TensorIndex::new(n, i)).collect());
+r.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
+r.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
+r.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
+
+let window = StandardTableau::new(Shape(vec![2, 2]), vec![vec![1, 3], vec![2, 4]]).unwrap();
+let terms: Vec<String> = r.project_with_tableau(&window).unwrap().iter().map(|t| t.to_string()).collect();
+assert_eq!(terms, ["8R_a_b_c_d", "4R_a_c_b_d", "-4R_a_d_b_c"]);
 ```
 
 ## References
 
 1. Portugal, R. (1999). Algorithmic simplification of tensor expressions. Journal of Physics A: Mathematical and General, 32(44), 7779.
 1. Manssur, L. R., Portugal, R., & Svaiter, B. F. (2002). Group-theoretic approach for symbolic tensor manipulation. International Journal of Modern Physics C, 13(07), 859-879.
-1. Manssur, L. R. U., & Portugal, R. (2001). Group-theoretic Approach for Symbolic Tensor Manipulation: II. Dummy Indices. arXiv preprint math-ph/0107032.
-1. Martin-García, J. M. (2008). xPerm: Fast index canonicalization for tensor computer algebra. Computer Physics Communications, 179(8), 597–603.
+1. Martin-Garcia, J. M. (2008). xPerm: Fast index canonicalization for tensor computer algebra. Computer Physics Communications, 179(8), 597-603.
 1. Niehoff, B. E. (2018). Faster tensor canonicalization. Computer Physics Communications, 228, 123-145.
-1. Niehoff, B. (2017). Efficient algorithms for tensor canonicalization with general index symmetries. Computer Physics Communications, 220, 1–9.
-1. Gonçalves, L. (n.d.). Young Diagrams and Tensors: The Particle Physics Dream Team. Retrieved June 27, 2025, from https://www.math.tecnico.ulisboa.pt/~jnatar/MAGEF-24/trabalhos/Leonor.pdf
-1. Kessler, D., Kvinge, H., & Wilson, J. B. (2018). A Frobenius-Schreier-Sims algorithm to decompose associative algebras. Journal of Symbolic Computation, 87, 1–19.
-1. Welsh, T. A. (1992). Young tableaux as explicit bases for the irreducible modules of the classical Lie groups and algebras. Journal of Algebra, 148(2), 377–404.
-1. Some Notes on Young Tableaux as useful for irreps of su(n). (n.d.). from https://www.physics.mcgill.ca/~keshav/673IV/youngtableaux.pdf
+1. Holt, D. F., Eick, B., & O'Brien, E. A. (2005). Handbook of Computational Group Theory. Chapman and Hall/CRC. Chapter 4, Schreier-Sims.
 
 ## License
 

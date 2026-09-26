@@ -3,7 +3,6 @@
 //! These tests verify the complete functionality of the library
 //! including complex tensor canonicalization scenarios.
 
-use butler_portugal::canonicalize_with_optimizations;
 use butler_portugal::young_tableaux::{Shape, StandardTableau};
 use butler_portugal::*;
 
@@ -242,9 +241,7 @@ fn test_error_handling() {
 }
 
 #[test]
-fn test_optimization_paths() {
-    // Test that optimized canonicalization gives same results
-
+fn test_canonicalization_is_idempotent() {
     let mut riemann = Tensor::new(
         "R",
         vec![
@@ -258,17 +255,10 @@ fn test_optimization_paths() {
     riemann.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
     riemann.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
 
-    let standard = canonicalize(&riemann).unwrap();
-    let optimized =
-        canonicalize_with_optimizations(&riemann, None, &CanonicalizationMethod::SchreierSims)
-            .unwrap();
-
-    // Both should give the same result
-    assert_eq!(standard.indices()[0].name(), optimized.indices()[0].name());
-    assert_eq!(standard.indices()[1].name(), optimized.indices()[1].name());
-    assert_eq!(standard.indices()[2].name(), optimized.indices()[2].name());
-    assert_eq!(standard.indices()[3].name(), optimized.indices()[3].name());
-    assert_eq!(standard.coefficient(), optimized.coefficient());
+    let once = canonicalize(&riemann).unwrap();
+    let twice = canonicalize(&once).unwrap();
+    assert_eq!(once.to_string(), "R_c_d_a_b");
+    assert_eq!(once, twice);
 }
 
 #[test]
@@ -303,21 +293,14 @@ fn test_large_tensor_performance() {
 
 #[test]
 fn test_tensor_projection_with_tableau() {
-    use butler_portugal::{Tensor, TensorIndex};
-    // Symmetric tableau shape for 2 indices
+    // Symmetrizing a tensor without symmetries over both slots gives both orderings
     let shape = Shape(vec![2]);
     let tableau = StandardTableau::new(shape, vec![vec![1, 2]]).unwrap();
     let tensor = Tensor::new(
         "S",
         vec![TensorIndex::new("b", 0), TensorIndex::new("a", 1)],
     );
-    let projected = canonicalize_with_optimizations(
-        &tensor,
-        Some(&tableau),
-        &CanonicalizationMethod::YoungSymmetrizer,
-    )
-    .unwrap();
-    // The result should be symmetric in a and b, so indices should be sorted
-    assert_eq!(projected.indices()[0].name(), "a");
-    assert_eq!(projected.indices()[1].name(), "b");
+    let terms = tensor.project_with_tableau(&tableau).unwrap();
+    let shown: Vec<String> = terms.iter().map(|t| t.to_string()).collect();
+    assert_eq!(shown, ["S_a_b", "S_b_a"]);
 }

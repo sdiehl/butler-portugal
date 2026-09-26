@@ -1,392 +1,190 @@
-//! Butler-Portugal tensor canonicalization algorithm
+//! Canonicalization of a tensor under its slot symmetries.
 //!
-//! This module implements the core Butler-Portugal algorithm for bringing
-//! tensors into canonical form by systematically applying symmetry operations.
+//! The slot symmetries generate a group of signed permutations. Signs are
+//! encoded by acting on two extra points `n` and `n + 1`, which a sign of
+//! `-1` swaps, so an ordinary Schreier-Sims chain over `n + 2` points
+//! describes the signed group. The tensor is identically zero exactly when
+//! that group contains the element that swaps only the two sign points.
 //!
-//! The algorithm is based on the double coset approach where a tensor with
-//! slot symmetries S and dummy symmetries D is canonicalized by finding
-//! the minimal representative in the double coset D*g*S.
+//! Because the base is the slot order `0, 1, ..., n - 1`, the lexicographically
+//! minimal index arrangement can be found by walking the stabilizer chain one
+//! slot at a time, keeping every partial product that achieves the minimum so
+//! far. Only repeated index names cause branching.
+//!
+//! Dummy (contracted) index renaming is not modelled. Only slot symmetries are
+//! applied.
 
 use crate::error::Result;
 use crate::index::TensorIndex;
-use crate::schreier_sims::schreier_sims;
-use crate::symmetry::Symmetry;
+use crate::permutation::{compose, identity, is_identity, Permutation};
+use crate::schreier_sims::{schreier_sims, BSGS};
 use crate::tensor::Tensor;
 
-/// Represents a permutation in array form
-pub type Permutation = Vec<usize>;
-
-/// Represents a base and strong generating set (BSGS)
+/// The signed slot symmetry group of a tensor.
 #[derive(Debug, Clone)]
-pub struct BSGS {
-    pub base: Vec<usize>,
-    pub generators: Vec<Permutation>,
+pub struct SlotGroup {
+    rank: usize,
+    bsgs: BSGS,
 }
 
-impl Default for BSGS {
-    fn default() -> Self {
-        Self::new()
+impl SlotGroup {
+    /// Builds the slot symmetry group of `tensor`.
+    pub fn new(tensor: &Tensor) -> Result<Self> {
+        let rank = tensor.rank();
+        let mut generators = Vec::new();
+        for symmetry in tensor.symmetries() {
+            for (perm, sign) in symmetry.generators(rank)? {
+                generators.push(signed(&perm, sign));
+            }
+        }
+        Ok(Self {
+            rank,
+            bsgs: schreier_sims(&generators, rank + 2),
+        })
     }
-}
 
-impl BSGS {
-    pub fn new() -> Self {
-        Self {
-            base: Vec::new(),
-            generators: Vec::new(),
+    /// The underlying stabilizer chain on `rank + 2` points.
+    pub fn bsgs(&self) -> &BSGS {
+        &self.bsgs
+    }
+
+    /// True if the symmetries force the tensor to vanish, because some slot
+    /// permutation is a symmetry with both signs.
+    pub fn is_zero(&self) -> bool {
+        self.bsgs.contains(&signed(&identity(self.rank), -1))
+    }
+
+    /// Number of distinct slot permutations in the group.
+    pub fn order(&self) -> usize {
+        if self.is_zero() {
+            self.bsgs.order() / 2
+        } else {
+            self.bsgs.order()
         }
     }
 
-    pub fn identity(size: usize) -> Self {
-        Self {
-            base: Vec::new(),
-            generators: vec![(0..size).collect()],
+    /// The sign the tensor picks up under `perm`, or `None` if `perm` is not a symmetry.
+    pub fn sign(&self, perm: &[usize]) -> Option<i32> {
+        if perm.len() != self.rank {
+            return None;
         }
+        let residual = self.bsgs.sift(&signed(perm, 1));
+        if is_identity(&residual) {
+            Some(1)
+        } else if residual == signed(&identity(self.rank), -1) {
+            Some(-1)
+        } else {
+            None
+        }
+    }
+
+    /// Every signed slot permutation in the group.
+    pub fn elements(&self) -> Vec<(Permutation, i32)> {
+        self.bsgs.elements().iter().map(|e| unsigned(e)).collect()
+    }
+
+    /// The group element producing the lexicographically minimal arrangement of
+    /// `indices`, with its sign. Returns `None` if the arrangement is reached
+    /// with both signs, which means the tensor vanishes.
+    pub fn minimal(&self, indices: &[TensorIndex]) -> Option<(Permutation, i32)> {
+        let key = |slot: usize| (indices[slot].name(), indices[slot].is_contravariant());
+        let mut partial = vec![identity(self.rank + 2)];
+        for (slot, level) in self.bsgs.levels().iter().enumerate().take(self.rank) {
+            let mut best = None;
+            let mut next = Vec::new();
+            for p in &partial {
+                for u in level.transversal.values() {
+                    let q = compose(u, p);
+                    let k = key(q[slot]);
+                    match best {
+                        Some(b) if k > b => {}
+                        Some(b) if k == b => next.push(q),
+                        _ => {
+                            best = Some(k);
+                            next = vec![q];
+                        }
+                    }
+                }
+            }
+            partial = next;
+        }
+        let (perm, sign) = unsigned(&partial[0]);
+        partial
+            .iter()
+            .all(|q| unsigned(q).1 == sign)
+            .then_some((perm, sign))
     }
 }
 
-/// Canonicalizes a tensor using the Butler-Portugal algorithm
+/// Encodes a signed permutation of `n` points as a permutation of `n + 2` points.
+fn signed(perm: &[usize], sign: i32) -> Permutation {
+    let n = perm.len();
+    let mut p = perm.to_vec();
+    if sign == 1 {
+        p.extend([n, n + 1]);
+    } else {
+        p.extend([n + 1, n]);
+    }
+    p
+}
+
+/// Decodes a permutation of `n + 2` points into a signed permutation of `n` points.
+fn unsigned(perm: &[usize]) -> (Permutation, i32) {
+    let n = perm.len() - 2;
+    let sign = if perm[n] == n { 1 } else { -1 };
+    (perm[..n].to_vec(), sign)
+}
+
+/// Brings a tensor into canonical form.
 ///
-/// The Butler-Portugal algorithm works by:
-/// 1. Identifying all possible index permutations respecting symmetries
-/// 2. Finding the lexicographically minimal form
-/// 3. Returning the canonical tensor with appropriate coefficient
+/// The result has the lexicographically smallest index arrangement reachable
+/// by the tensor's slot symmetries, ordered by index name and then variance
+/// with covariant first, and its coefficient carries the accumulated sign.
+/// A tensor that vanishes by symmetry comes back with coefficient `0`.
 ///
-/// # Arguments
-/// * `tensor` - The tensor to canonicalize
-///
-/// # Returns
-/// * `Ok(Tensor)` - The canonicalized tensor
-/// * `Err(ButlerPortugalError)` - If canonicalization fails
-///
-/// # Example
 /// ```rust
 /// use butler_portugal::{canonicalize, Symmetry, Tensor, TensorIndex};
 ///
 /// let mut tensor = Tensor::new(
 ///     "R",
 ///     vec![
-///         TensorIndex::new("a", 0),
-///         TensorIndex::new("b", 1),
-///         TensorIndex::new("c", 2),
-///         TensorIndex::new("d", 3),
+///         TensorIndex::new("d", 0),
+///         TensorIndex::new("c", 1),
+///         TensorIndex::new("b", 2),
+///         TensorIndex::new("a", 3),
 ///     ],
 /// );
-///
-/// // Riemann tensor symmetries
 /// tensor.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
 /// tensor.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
+/// tensor.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
 ///
-/// let canonical = canonicalize(&tensor);
+/// let canonical = canonicalize(&tensor)?;
+/// assert_eq!(canonical.to_string(), "R_a_b_c_d");
+/// # Ok::<(), butler_portugal::ButlerPortugalError>(())
 /// ```
 pub fn canonicalize(tensor: &Tensor) -> Result<Tensor> {
-    // Handle trivial cases
-    if tensor.is_zero() {
-        let mut zero_tensor = tensor.clone();
-        zero_tensor.set_coefficient(0);
-        return Ok(zero_tensor);
-    }
+    let group = SlotGroup::new(tensor)?;
+    Ok(canonicalize_in(tensor, &group))
+}
 
-    if tensor.rank() <= 1 {
-        return Ok(tensor.clone());
+/// Canonicalizes `tensor` using an already computed slot group.
+pub(crate) fn canonicalize_in(tensor: &Tensor, group: &SlotGroup) -> Tensor {
+    let zero = || {
+        let mut t = tensor.clone();
+        t.set_coefficient(0);
+        t
+    };
+    if tensor.coefficient() == 0 || group.is_zero() {
+        return zero();
     }
-
-    // Check for zero tensor due to symmetry constraints
-    for symmetry in tensor.symmetries() {
-        if symmetry.makes_tensor_zero(tensor.indices()) {
-            let mut zero_tensor = tensor.clone();
-            zero_tensor.set_coefficient(0);
-            return Ok(zero_tensor);
+    match group.minimal(tensor.indices()) {
+        Some((perm, sign)) => {
+            let mut t = tensor.reorder(&perm);
+            t.set_coefficient(t.coefficient() * sign);
+            t
         }
+        None => zero(),
     }
-
-    // Generate all valid permutations considering symmetries
-    let valid_permutations = generate_valid_permutations(tensor);
-
-    if valid_permutations.is_empty() {
-        return Ok(tensor.clone());
-    }
-
-    // Find lexicographically minimal tensor form
-    let mut best_tensor = None;
-    let mut best_canonical_key = None;
-
-    for perm in valid_permutations {
-        let candidate = tensor.permute(&perm)?;
-
-        if candidate.is_zero() {
-            continue;
-        }
-
-        let canonical_key = tensor_canonical_key(&candidate);
-
-        if let Some(ref best_key) = best_canonical_key {
-            if canonical_key < *best_key {
-                best_canonical_key = Some(canonical_key);
-                best_tensor = Some(candidate);
-            }
-        } else {
-            best_canonical_key = Some(canonical_key);
-            best_tensor = Some(candidate);
-        }
-    }
-
-    if let Some(tensor) = best_tensor {
-        Ok(tensor)
-    } else {
-        // All permutations resulted in zero
-        let mut zero_tensor = tensor.clone();
-        zero_tensor.set_coefficient(0);
-        Ok(zero_tensor)
-    }
-}
-
-/// Generates all valid permutations respecting symmetries using Schreier-Sims BSGS
-fn generate_valid_permutations(tensor: &Tensor) -> Vec<Permutation> {
-    let n = tensor.rank();
-    let generators = tensor_symmetry_generators(tensor);
-    let bsgs = schreier_sims(&generators, n);
-    enumerate_group(&bsgs, n)
-}
-
-/// Enumerate all group elements from a BSGS by recursively applying all strong generators to the identity permutation, using a HashSet to avoid duplicates. This efficiently generates the full permutation group defined by the base and strong generating set, and is much faster than brute-force BFS for most practical tensor symmetry groups.
-fn enumerate_group(bsgs: &BSGS, degree: usize) -> Vec<Permutation> {
-    // If there is no base, just return the identity
-    if bsgs.base.is_empty() {
-        return vec![(0..degree).collect()];
-    }
-
-    // Recursive helper to build up group elements
-    fn enumerate_recursive(
-        generators: &[Permutation],
-        current: &[usize],
-        results: &mut Vec<Permutation>,
-        visited: &mut std::collections::HashSet<Vec<usize>>,
-    ) {
-        if !visited.insert(current.to_owned()) {
-            return;
-        }
-        results.push(current.to_owned());
-        for gen in generators {
-            let next = crate::schreier_sims::compose_permutations(current, gen);
-            enumerate_recursive(generators, &next, results, visited);
-        }
-    }
-
-    let mut results = Vec::new();
-    let mut visited = std::collections::HashSet::new();
-    let identity: Permutation = (0..degree).collect();
-    enumerate_recursive(&bsgs.generators, &identity, &mut results, &mut visited);
-    results
-}
-
-/// Creates a canonical key for tensor comparison
-fn tensor_canonical_key(tensor: &Tensor) -> String {
-    let mut key = String::new();
-
-    // Add index names in order with their variance
-    for index in tensor.indices() {
-        key.push_str(index.name());
-        key.push(if index.is_contravariant() { '^' } else { '_' });
-        key.push('|'); // separator
-    }
-
-    // Add coefficient at the end (so lexicographic ordering of indices takes precedence)
-    key.push_str(&format!("#{}", tensor.coefficient()));
-
-    key
-}
-
-/// Converts a symmetry to permutation generators
-fn symmetry_to_generators(symmetry: &Symmetry, size: usize) -> Vec<Permutation> {
-    match symmetry {
-        Symmetry::Symmetric { indices } => {
-            let mut generators = Vec::new();
-            // For symmetric group, generate adjacent transpositions
-            for i in 0..indices.len().saturating_sub(1) {
-                let mut perm: Vec<usize> = (0..size).collect();
-                if indices[i] < size && indices[i + 1] < size {
-                    perm.swap(indices[i], indices[i + 1]);
-                }
-                generators.push(perm);
-            }
-            generators
-        }
-        Symmetry::Antisymmetric { indices } => {
-            let mut generators = Vec::new();
-            // For antisymmetric group, generate adjacent transpositions
-            for i in 0..indices.len().saturating_sub(1) {
-                let mut perm: Vec<usize> = (0..size).collect();
-                if indices[i] < size && indices[i + 1] < size {
-                    perm.swap(indices[i], indices[i + 1]);
-                }
-                generators.push(perm);
-            }
-            generators
-        }
-        Symmetry::SymmetricPairs { pairs } => {
-            let mut generators = Vec::new();
-
-            // Generate swaps within each pair
-            for &(i, j) in pairs {
-                if i < size && j < size {
-                    let mut perm: Vec<usize> = (0..size).collect();
-                    perm.swap(i, j);
-                    generators.push(perm);
-                }
-            }
-
-            // Generate pair exchanges between consecutive pairs
-            // For Riemann tensor: (0,1) ↔ (2,3) gives permutation [2, 3, 0, 1]
-            for pair_idx in 0..pairs.len().saturating_sub(1) {
-                let (i1, j1) = pairs[pair_idx];
-                let (i2, j2) = pairs[pair_idx + 1];
-
-                if i1 < size && j1 < size && i2 < size && j2 < size {
-                    let mut perm: Vec<usize> = (0..size).collect();
-                    perm[i1] = i2;
-                    perm[j1] = j2;
-                    perm[i2] = i1;
-                    perm[j2] = j1;
-                    generators.push(perm);
-                }
-            }
-
-            generators
-        }
-        Symmetry::Cyclic { indices } => {
-            if indices.len() > 1 {
-                let mut perm: Vec<usize> = (0..size).collect();
-                // Create cyclic permutation
-                if indices.iter().all(|&i| i < size) {
-                    let first = indices[0];
-                    for i in 0..indices.len() - 1 {
-                        perm[indices[i]] = indices[i + 1];
-                    }
-                    perm[indices[indices.len() - 1]] = first;
-                }
-                vec![perm]
-            } else {
-                vec![(0..size).collect()]
-            }
-        }
-        Symmetry::Custom {
-            valid_permutations,
-            signs: _,
-        } => valid_permutations.clone(),
-    }
-}
-
-/// Checks if a permutation is the identity
-#[allow(dead_code)]
-fn is_identity(perm: &[usize]) -> bool {
-    perm.iter().enumerate().all(|(i, &val)| i == val)
-}
-
-/// Canonicalization method options
-pub enum CanonicalizationMethod {
-    SchreierSims,
-    YoungSymmetrizer,
-}
-
-/// Advanced canonicalization with optimization for specific tensor types
-/// Optionally, project onto a Young tableau if provided (advanced feature)
-/// and optionally use Young symmetrizer-based canonicalization.
-pub fn canonicalize_with_optimizations(
-    tensor: &Tensor,
-    tableau: Option<&crate::young_tableaux::StandardTableau>,
-    method: &CanonicalizationMethod,
-) -> Result<Tensor> {
-    match method {
-        CanonicalizationMethod::SchreierSims => {
-            let mut result = if is_riemann_like(tensor) {
-                canonicalize_riemann_tensor(tensor)
-            } else if is_symmetric_tensor(tensor) {
-                canonicalize_symmetric_tensor(tensor)
-            } else if is_antisymmetric_tensor(tensor) {
-                canonicalize_antisymmetric_tensor(tensor)
-            } else {
-                canonicalize(tensor)
-            }?;
-            if let Some(tab) = tableau {
-                result = result.project_with_tableau(tab)?;
-            }
-            Ok(result)
-        }
-        CanonicalizationMethod::YoungSymmetrizer => {
-            if let Some(tab) = tableau {
-                // First canonicalize the tensor to ensure it's in the correct form
-                // before applying the Young symmetrizer projection
-                let canonicalized = canonicalize(tensor)?;
-                canonicalized.project_with_tableau(tab)
-            } else {
-                Err(crate::ButlerPortugalError::InvalidPermutation(
-                    "YoungSymmetrizer method requires a tableau".to_string(),
-                ))
-            }
-        }
-    }
-}
-
-/// Checks if tensor has Riemann-like symmetries
-fn is_riemann_like(tensor: &Tensor) -> bool {
-    if tensor.rank() != 4 {
-        return false;
-    }
-
-    let symmetries = tensor.symmetries();
-    let has_first_antisym = symmetries.iter().any(|s| s.is_antisymmetric_pair(0, 1));
-    let has_second_antisym = symmetries.iter().any(|s| s.is_antisymmetric_pair(2, 3));
-
-    has_first_antisym && has_second_antisym
-}
-
-/// Optimized canonicalization for Riemann tensors
-fn canonicalize_riemann_tensor(tensor: &Tensor) -> Result<Tensor> {
-    // For Riemann tensors, use the general algorithm with full symmetries
-    canonicalize(tensor)
-}
-
-/// Checks if tensor is purely symmetric
-fn is_symmetric_tensor(tensor: &Tensor) -> bool {
-    tensor.symmetries().iter().all(|s| s.is_symmetric())
-}
-
-/// Optimized canonicalization for symmetric tensors
-fn canonicalize_symmetric_tensor(tensor: &Tensor) -> Result<Tensor> {
-    let mut indices_with_positions: Vec<(usize, &TensorIndex)> =
-        tensor.indices().iter().enumerate().collect();
-
-    indices_with_positions.sort_by(|a, b| a.1.canonical_cmp(b.1));
-
-    let permutation: Vec<usize> = indices_with_positions.iter().map(|(pos, _)| *pos).collect();
-    tensor.permute(&permutation)
-}
-
-/// Checks if tensor is purely antisymmetric
-fn is_antisymmetric_tensor(tensor: &Tensor) -> bool {
-    tensor.symmetries().iter().all(|s| s.is_antisymmetric())
-}
-
-/// Optimized canonicalization for antisymmetric tensors
-fn canonicalize_antisymmetric_tensor(tensor: &Tensor) -> Result<Tensor> {
-    let mut indices_with_positions: Vec<(usize, &TensorIndex)> =
-        tensor.indices().iter().enumerate().collect();
-
-    indices_with_positions.sort_by(|a, b| a.1.canonical_cmp(b.1));
-
-    let permutation: Vec<usize> = indices_with_positions.iter().map(|(pos, _)| *pos).collect();
-    tensor.permute(&permutation)
-}
-
-/// Converts all tensor symmetries into a flat list of permutation generators
-fn tensor_symmetry_generators(tensor: &Tensor) -> Vec<Permutation> {
-    let n = tensor.rank();
-    let mut gens = Vec::new();
-    for sym in tensor.symmetries() {
-        gens.extend(symmetry_to_generators(sym, n));
-    }
-    gens
 }
 
 #[cfg(test)]
@@ -394,85 +192,110 @@ mod tests {
     use super::*;
     use crate::symmetry::Symmetry;
 
-    #[test]
-    fn test_trivial_canonicalization() {
-        let tensor = Tensor::new("T", vec![TensorIndex::new("i", 0)]);
-        let result = match canonicalize(&tensor) {
-            Ok(val) => val,
-            Err(e) => panic!("canonicalize failed: {e}"),
-        };
-        assert_eq!(result, tensor);
+    fn tensor(name: &str, names: &[&str]) -> Tensor {
+        Tensor::new(
+            name,
+            names
+                .iter()
+                .enumerate()
+                .map(|(i, n)| TensorIndex::new(n, i))
+                .collect(),
+        )
     }
 
     #[test]
-    fn test_symmetric_tensor_canonicalization() {
-        let mut tensor = Tensor::new(
+    fn trivial() {
+        let t = tensor("T", &["i"]);
+        assert_eq!(canonicalize(&t).unwrap(), t);
+        let t = Tensor::new("s", vec![]);
+        assert_eq!(canonicalize(&t).unwrap(), t);
+    }
+
+    #[test]
+    fn symmetric() {
+        let mut t = tensor("S", &["b", "a"]);
+        t.add_symmetry(Symmetry::symmetric(vec![0, 1]));
+        assert_eq!(canonicalize(&t).unwrap().to_string(), "S_a_b");
+    }
+
+    #[test]
+    fn antisymmetric() {
+        let mut t = tensor("A", &["b", "a"]);
+        t.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
+        assert_eq!(canonicalize(&t).unwrap().to_string(), "-A_a_b");
+    }
+
+    #[test]
+    fn antisymmetric_repeated_index_vanishes() {
+        let mut t = tensor("A", &["a", "a"]);
+        t.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
+        assert_eq!(canonicalize(&t).unwrap().coefficient(), 0);
+    }
+
+    #[test]
+    fn inconsistent_symmetries_vanish() {
+        let mut t = tensor("T", &["a", "b", "c"]);
+        t.add_symmetry(Symmetry::symmetric(vec![0, 1]));
+        t.add_symmetry(Symmetry::antisymmetric(vec![1, 2]));
+        assert!(SlotGroup::new(&t).unwrap().is_zero());
+        assert_eq!(canonicalize(&t).unwrap().coefficient(), 0);
+    }
+
+    #[test]
+    fn group_order_and_signs() {
+        let mut t = tensor("R", &["a", "b", "c", "d"]);
+        t.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
+        t.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
+        t.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
+        let g = SlotGroup::new(&t).unwrap();
+        assert_eq!(g.order(), 8);
+        assert_eq!(g.sign(&[1, 0, 2, 3]), Some(-1));
+        assert_eq!(g.sign(&[2, 3, 0, 1]), Some(1));
+        assert_eq!(g.sign(&[3, 2, 1, 0]), Some(1));
+        assert_eq!(g.sign(&[3, 2, 0, 1]), Some(-1));
+        assert_eq!(g.sign(&[0, 2, 1, 3]), None);
+        assert_eq!(g.elements().len(), 8);
+    }
+
+    #[test]
+    fn cyclic_is_idempotent() {
+        let mut t = tensor("T", &["a", "b", "c"]);
+        t.add_symmetry(Symmetry::cyclic(vec![0, 1, 2]));
+        let once = canonicalize(&t).unwrap();
+        assert_eq!(once.to_string(), "T_a_b_c");
+        assert_eq!(canonicalize(&once).unwrap(), once);
+        let mut t = tensor("T", &["c", "a", "b"]);
+        t.add_symmetry(Symmetry::cyclic(vec![0, 1, 2]));
+        assert_eq!(canonicalize(&t).unwrap().to_string(), "T_a_b_c");
+        let mut t = tensor("T", &["b", "a", "c"]);
+        t.add_symmetry(Symmetry::cyclic(vec![0, 1, 2]));
+        assert_eq!(canonicalize(&t).unwrap().to_string(), "T_a_c_b");
+    }
+
+    #[test]
+    fn name_order_matches_index_ordering() {
+        let mut t = tensor("T", &["a1", "a"]);
+        t.add_symmetry(Symmetry::symmetric(vec![0, 1]));
+        assert_eq!(canonicalize(&t).unwrap().to_string(), "T_a_a1");
+    }
+
+    #[test]
+    fn covariant_sorts_before_contravariant() {
+        let mut t = Tensor::new(
             "S",
-            vec![TensorIndex::new("b", 0), TensorIndex::new("a", 1)],
+            vec![
+                TensorIndex::contravariant("a", 0),
+                TensorIndex::covariant("a", 1),
+            ],
         );
-
-        tensor.add_symmetry(Symmetry::symmetric(vec![0, 1]));
-
-        let result = match canonicalize(&tensor) {
-            Ok(val) => val,
-            Err(e) => panic!("canonicalize failed: {e}"),
-        };
-        assert_eq!(result.indices()[0].name(), "a");
-        assert_eq!(result.indices()[1].name(), "b");
+        t.add_symmetry(Symmetry::symmetric(vec![0, 1]));
+        assert_eq!(canonicalize(&t).unwrap().to_string(), "S_a^a");
     }
 
     #[test]
-    fn test_antisymmetric_tensor_canonicalization() {
-        let mut tensor = Tensor::new(
-            "A",
-            vec![TensorIndex::new("b", 0), TensorIndex::new("a", 1)],
-        );
-
-        tensor.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
-
-        let result = match canonicalize(&tensor) {
-            Ok(val) => val,
-            Err(e) => panic!("canonicalize failed: {e}"),
-        };
-        assert_eq!(result.indices()[0].name(), "a");
-        assert_eq!(result.indices()[1].name(), "b");
-        assert_eq!(result.coefficient(), -1); // Sign change from swap
-    }
-
-    #[test]
-    fn test_zero_tensor_canonicalization() {
-        let mut tensor = Tensor::new(
-            "A",
-            vec![TensorIndex::new("a", 0), TensorIndex::new("a", 1)],
-        );
-
-        tensor.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
-
-        let result = match canonicalize(&tensor) {
-            Ok(val) => val,
-            Err(e) => panic!("canonicalize failed: {e}"),
-        };
-        assert_eq!(result.coefficient(), 0);
-    }
-
-    #[test]
-    fn test_identity_permutation() {
-        let perm = vec![0, 1, 2, 3];
-        assert!(is_identity(&perm));
-
-        let non_identity = vec![1, 0, 2, 3];
-        assert!(!is_identity(&non_identity));
-    }
-
-    #[test]
-    fn test_tensor_canonical_key() {
-        let tensor = Tensor::new(
-            "T",
-            vec![TensorIndex::new("a", 0), TensorIndex::contravariant("b", 1)],
-        );
-
-        let key = tensor_canonical_key(&tensor);
-        assert!(key.contains("a_"));
-        assert!(key.contains("b^"));
+    fn invalid_symmetry_is_an_error() {
+        let mut t = tensor("T", &["a", "b"]);
+        t.add_symmetry(Symmetry::symmetric(vec![0, 7]));
+        assert!(canonicalize(&t).is_err());
     }
 }
