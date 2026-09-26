@@ -57,10 +57,29 @@ r = Tensor("R", ["^a", "c", "a", "b"]).antisymmetric(0, 1).antisymmetric(2, 3)
 print(r.symmetric_pairs((0, 1), (2, 3)).canonicalize())  # R_b_a_c^a
 ```
 
-Wheels for Linux, macOS, and Windows are attached to each release:
+To depend on it from a `pyproject.toml` (builds from source, requires a Rust toolchain):
+
+```toml
+[project]
+dependencies = [
+    "butler-portugal @ git+https://github.com/sdiehl/butler-portugal.git@v0.4.0",
+]
+```
+
+Or with uv:
 
 ```bash
-uv pip install butler-portugal --find-links https://github.com/sdiehl/butler-portugal/releases/expanded_assets/v0.4.0
+uv add git+https://github.com/sdiehl/butler-portugal --tag v0.4.0
+```
+
+which records it in `pyproject.toml` as:
+
+```toml
+[project]
+dependencies = ["butler-portugal"]
+
+[tool.uv.sources]
+butler-portugal = { git = "https://github.com/sdiehl/butler-portugal", tag = "v0.4.0" }
 ```
 
 ## References
