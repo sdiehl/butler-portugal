@@ -81,6 +81,12 @@ let terms: Vec<String> = r.project_with_tableau(&window).unwrap().iter().map(|t|
 assert_eq!(terms, ["8R_a_b_c_d", "4R_a_c_b_d", "-4R_a_d_b_c"]);
 ```
 
+The symmetrizer has one term per row and column permutation, so it grows factorially with the tableau. The optional `parallel` feature canonicalizes those terms on a rayon thread pool:
+
+```toml
+butler-portugal = { version = "0.3", features = ["parallel"] }
+```
+
 ## References
 
 1. Portugal, R. (1999). Algorithmic simplification of tensor expressions. Journal of Physics A: Mathematical and General, 32(44), 7779.

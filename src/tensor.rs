@@ -178,14 +178,21 @@ impl Tensor {
     /// ```
     pub fn project_with_tableau(&self, tableau: &StandardTableau) -> Result<Vec<Tensor>> {
         let group = self.slot_group()?;
+        let perms = young_symmetrizer_permutations(tableau, self.rank())?;
+        let term = |(perm, sign): &(Vec<usize>, i32)| {
+            let mut t = self.reorder(perm);
+            t.coefficient *= sign;
+            canonicalize_in(&t, &group)
+        };
+        #[cfg(feature = "parallel")]
+        let canonical: Vec<Tensor> = {
+            use rayon::prelude::*;
+            perms.par_iter().map(term).collect()
+        };
+        #[cfg(not(feature = "parallel"))]
+        let canonical: Vec<Tensor> = perms.iter().map(term).collect();
         let mut terms: BTreeMap<Vec<(String, bool)>, Tensor> = BTreeMap::new();
-        for (perm, sign) in young_symmetrizer_permutations(tableau, self.rank())? {
-            let mut term = self.reorder(&perm);
-            term.coefficient *= sign;
-            let term = canonicalize_in(&term, &group);
-            if term.coefficient == 0 {
-                continue;
-            }
+        for term in canonical.into_iter().filter(|t| t.coefficient != 0) {
             let key = term
                 .indices
                 .iter()

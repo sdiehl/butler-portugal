@@ -1,6 +1,6 @@
 [package]
 name = "butler-portugal"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Stephen Diehl"]
 categories = ["science", "mathematics"]
 documentation = "https://docs.rs/butler-portugal"
@@ -27,6 +27,10 @@ description = "A Rust library implementing the Butler-Portugal algorithm for ten
 
 [dependencies]
 itertools = "0.15.0"
+rayon = { version = "1", optional = true }
+
+[features]
+parallel = ["dep:rayon"]
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
