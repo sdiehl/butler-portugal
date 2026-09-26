@@ -25,6 +25,8 @@ Full Butler-Portugal algorithm with dummy indices.
 - C API: `bp_tensor_product`, `bp_tensor_set_metric`, `bp_index_set_type`.
 - C API: `bp_symmetry_custom` from signed generator lists.
 - Python bindings over the C API with ctypes.
+- Python wheels built in CI and attached to releases.
+- CI checks formatting, clippy, and Python tests.
 - Matches xPerm on Riemann monomials, and runs faster.
 - Minimum Rust version is now 1.97.
 

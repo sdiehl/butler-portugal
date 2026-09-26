@@ -14,7 +14,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
+
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+
+    - name: Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
 
     - name: Build
       run: cargo build --verbose
@@ -36,3 +42,6 @@ jobs:
     - name: Run C example
       run: |
         LD_LIBRARY_PATH=./target/release ./target/release/c_example
+
+    - name: Run Python tests
+      run: PYTHONPATH=python python3 -m unittest discover -s python/tests

@@ -1,0 +1,5 @@
+include Cargo.toml Cargo.lock rust-toolchain.toml LICENSE README.md
+recursive-include src *.rs
+recursive-include examples *.rs
+recursive-include benches *.rs
+recursive-include python/tests *.py

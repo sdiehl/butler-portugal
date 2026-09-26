@@ -57,7 +57,11 @@ r = Tensor("R", ["^a", "c", "a", "b"]).antisymmetric(0, 1).antisymmetric(2, 3)
 print(r.symmetric_pairs((0, 1), (2, 3)).canonicalize())  # R_b_a_c^a
 ```
 
-Build with `cargo build --release` and put `python/` on `PYTHONPATH`.
+Wheels for Linux, macOS, and Windows are attached to each release:
+
+```bash
+uv pip install butler-portugal --find-links https://github.com/sdiehl/butler-portugal/releases/expanded_assets/v0.4.0
+```
 
 ## References
 
@@ -70,4 +74,4 @@ Build with `cargo build --release` and put `python/` on `PYTHONPATH`.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE.md) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

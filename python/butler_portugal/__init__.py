@@ -14,11 +14,16 @@ def _load():
     name = {"darwin": "libbutler_portugal.dylib", "win32": "butler_portugal.dll"}.get(
         sys.platform, "libbutler_portugal.so"
     )
-    path = (
-        os.environ.get("BUTLER_PORTUGAL_LIB")
-        or Path(__file__).parent.parent / "target" / "release" / name
-    )
-    return C.CDLL(str(path))
+    here = Path(__file__).parent
+    bundled = [p for p in here.iterdir() if p.suffix in (".so", ".pyd")]
+    for path in [
+        os.environ.get("BUTLER_PORTUGAL_LIB"),
+        *bundled,
+        here.parents[1] / "target" / "release" / name,
+    ]:
+        if path and Path(path).exists():
+            return C.CDLL(str(path))
+    raise OSError(f"{name} not found; build it with `cargo build --release`")
 
 
 _lib = _load()

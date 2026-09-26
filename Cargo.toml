@@ -11,6 +11,8 @@ include = [
   "examples/**/*",
   "tests/**/*",
   "benches/**/*",
+  "include/**/*",
+  "python/**/*.py",
   "README.md",
   "LICENSE",
   "Cargo.toml",
