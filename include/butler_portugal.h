@@ -29,6 +29,13 @@ typedef enum {
   BP_ALLOCATION_ERROR = 4,
 } BPResult;
 
+/* Metric of an index type, passed to bp_tensor_set_metric */
+typedef enum {
+  BP_METRIC_SYMMETRIC = 0,     /* raising and lowering is free */
+  BP_METRIC_ANTISYMMETRIC = 1, /* raising and lowering flips the sign */
+  BP_METRIC_ABSENT = 2,        /* contraction ends are fixed */
+} BPMetric;
+
 /* -------------------------------------------------------------------------- */
 /* TensorIndex Functions */
 /* -------------------------------------------------------------------------- */
@@ -54,6 +61,16 @@ BPTensorIndexHandle bp_index_new(const char *name, size_t position);
  * The returned handle must be freed with bp_index_free().
  */
 BPTensorIndexHandle bp_index_contravariant(const char *name, size_t position);
+
+/**
+ * Set the index type of an index. Indices only contract within one type and
+ * each type has its own metric. The default type is "".
+ *
+ * @param index       Handle to the index
+ * @param index_type  Null-terminated type name (e.g., "spinor")
+ * @return            BP_SUCCESS on success, error code otherwise
+ */
+BPResult bp_index_set_type(BPTensorIndexHandle index, const char *index_type);
 
 /**
  * Free a tensor index.
@@ -123,6 +140,23 @@ BPSymmetryHandle bp_symmetry_symmetric_pairs(const size_t *pairs, size_t len);
  * The returned handle must be freed with bp_symmetry_free().
  */
 BPSymmetryHandle bp_symmetry_cyclic(const size_t *indices, size_t len);
+
+/**
+ * Create a symmetry from explicit signed generators.
+ *
+ * @param permutations    num_generators permutations of length rank, back to
+ *                        back; new slot i takes old slot p[i]
+ * @param signs           One sign (1 or -1) per generator
+ * @param num_generators  Number of generators
+ * @param rank            Rank of the tensor the symmetry applies to
+ * @return                Handle to the new symmetry, or NULL on failure
+ *
+ * Invalid generators are reported when the tensor is canonicalized.
+ * The returned handle must be freed with bp_symmetry_free().
+ */
+BPSymmetryHandle bp_symmetry_custom(const size_t *permutations,
+                                    const int32_t *signs,
+                                    size_t num_generators, size_t rank);
 
 /**
  * Free a symmetry.
@@ -205,6 +239,35 @@ BPTensorHandle bp_tensor_clone(BPTensorHandle tensor);
  */
 BPResult bp_tensor_add_symmetry(BPTensorHandle tensor,
                                 BPSymmetryHandle symmetry);
+
+/**
+ * Set the metric of an index type on a tensor. Every type defaults to
+ * BP_METRIC_SYMMETRIC.
+ *
+ * @param tensor      Handle to the tensor
+ * @param index_type  Null-terminated type name, "" for the default type
+ * @param metric      A BPMetric value
+ * @return            BP_SUCCESS, or BP_INVALID_ARGUMENT for an unknown metric
+ */
+BPResult bp_tensor_set_metric(BPTensorHandle tensor, const char *index_type,
+                              int32_t metric);
+
+/**
+ * Multiply tensors into one tensor. Indices are concatenated in factor
+ * order, each factor keeps its symmetries, and identical factors (same name,
+ * rank and symmetries) commute. Coefficients multiply and metrics merge.
+ *
+ * @param factors      Array of tensor handles
+ * @param num_factors  Number of factors
+ * @param error_out    Optional pointer to receive error code (may be NULL)
+ * @return             Handle to the product, or NULL on a null factor or
+ *                     conflicting metrics
+ *
+ * The factors are cloned. The returned handle must be freed with
+ * bp_tensor_free().
+ */
+BPTensorHandle bp_tensor_product(const BPTensorHandle *factors,
+                                 size_t num_factors, BPResult *error_out);
 
 /**
  * Get the rank (number of indices) of a tensor.

@@ -275,6 +275,67 @@ static void test_zero_tensor(void) {
   printf("  PASSED\n");
 }
 
+static BPTensorHandle antisymmetric_pair(const char *name,
+                                         BPTensorIndexHandle first,
+                                         BPTensorIndexHandle second) {
+  size_t swap[] = {1, 0};
+  int32_t minus[] = {-1};
+  BPSymmetryHandle anti = bp_symmetry_custom(swap, minus, 1, 2);
+  BPTensorIndexHandle indices[] = {first, second};
+  BPTensorHandle tensor = bp_tensor_new(name, indices, 2);
+  assert(bp_tensor_add_symmetry(tensor, anti) == BP_SUCCESS);
+  bp_symmetry_free(anti);
+  return tensor;
+}
+
+static void test_dummies_and_products(void) {
+  printf("Testing dummy indices and products...\n");
+
+  /* F_ba F^ab = -F_ab F^ab */
+  BPTensorIndexHandle b = bp_index_new("b", 0), a = bp_index_new("a", 1);
+  BPTensorIndexHandle ua = bp_index_contravariant("a", 0);
+  BPTensorIndexHandle ub = bp_index_contravariant("b", 1);
+  BPTensorHandle factors[] = {antisymmetric_pair("F", b, a),
+                              antisymmetric_pair("F", ua, ub)};
+
+  BPResult error = BP_NULL_POINTER;
+  BPTensorHandle ff = bp_tensor_product(factors, 2, &error);
+  assert(error == BP_SUCCESS && ff != NULL);
+  BPTensorHandle canonical = bp_canonicalize(ff, &error);
+  char *str = bp_tensor_to_string(canonical);
+  printf("  F_b_a F^a^b -> %s\n", str);
+  assert(strcmp(str, "-F_a_b F^a^b") == 0);
+  bp_string_free(str);
+  bp_tensor_free(canonical);
+
+  /* A spinor metric is antisymmetric: psi^A psi_A = -psi_A psi^A */
+  BPTensorIndexHandle up = bp_index_contravariant("A", 0);
+  BPTensorIndexHandle down = bp_index_new("A", 1);
+  assert(bp_index_set_type(up, "spinor") == BP_SUCCESS);
+  assert(bp_index_set_type(down, "spinor") == BP_SUCCESS);
+  BPTensorIndexHandle pair[] = {up, down};
+  BPTensorHandle psi = bp_tensor_new("E", pair, 2);
+  assert(bp_tensor_set_metric(psi, "spinor", BP_METRIC_ANTISYMMETRIC) ==
+         BP_SUCCESS);
+  assert(bp_tensor_set_metric(psi, "spinor", 9) == BP_INVALID_ARGUMENT);
+  canonical = bp_canonicalize(psi, &error);
+  str = bp_tensor_to_string(canonical);
+  printf("  E^A_A -> %s\n", str);
+  assert(strcmp(str, "-E_A^A") == 0);
+  bp_string_free(str);
+  bp_tensor_free(canonical);
+
+  bp_tensor_free(psi);
+  bp_tensor_free(ff);
+  bp_tensor_free(factors[0]);
+  bp_tensor_free(factors[1]);
+  BPTensorIndexHandle all[] = {a, b, ua, ub, up, down};
+  for (size_t i = 0; i < 6; i++)
+    bp_index_free(all[i]);
+
+  printf("  PASSED\n");
+}
+
 int main(void) {
   printf("=== Butler-Portugal C FFI Tests ===\n\n");
 
@@ -286,6 +347,7 @@ int main(void) {
   test_symmetry_addition();
   test_canonicalization();
   test_zero_tensor();
+  test_dummies_and_products();
 
   printf("\n=== All tests passed! ===\n");
   return 0;

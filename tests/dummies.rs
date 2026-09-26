@@ -27,23 +27,14 @@ fn riemann(specs: [&str; 4]) -> Tensor {
     t
 }
 
-/// `R_{lower} R^{upper}` as one rank 8 tensor with the factor exchange symmetry.
+/// `R_{lower} R^{upper}` as a product of two commuting Riemann factors.
 fn riemann_squared(lower: [&str; 4], upper: [&str; 4]) -> Tensor {
-    let indices = lower
-        .iter()
-        .map(|n| n.to_string())
-        .chain(upper.iter().map(|n| format!("^{n}")))
-        .enumerate()
-        .map(|(i, s)| index(&s, i))
-        .collect();
-    let mut t = Tensor::new("RR", indices);
-    riemann_symmetries(&mut t, 0);
-    riemann_symmetries(&mut t, 4);
-    t.add_symmetry(Symmetry::custom(
-        vec![vec![4, 5, 6, 7, 0, 1, 2, 3]],
-        vec![1],
-    ));
-    t
+    let upper = upper.map(|n| format!("^{n}"));
+    Tensor::product(&[
+        riemann(lower),
+        riemann(upper.each_ref().map(String::as_str)),
+    ])
+    .unwrap()
 }
 
 fn canon(t: &Tensor) -> (i32, String) {
@@ -116,4 +107,39 @@ fn cross_contraction_is_half_kretschmann() {
 fn name_used_three_times_is_an_error() {
     let t = Tensor::new("T", vec![index("a", 0), index("^a", 1), index("a", 2)]);
     assert!(canonicalize(&t).is_err());
+}
+
+#[test]
+fn identical_factors_commute() {
+    let x = canon(&riemann_squared(["a", "b", "c", "d"], ["a", "b", "c", "d"]));
+    assert_eq!(x, (1, "R_a_b_c_d R^a^b^c^d".into()));
+    let swapped = Tensor::product(&[
+        riemann(["^a", "^b", "^c", "^d"]),
+        riemann(["a", "b", "c", "d"]),
+    ]);
+    assert_eq!(canon(&swapped.unwrap()), x);
+}
+
+#[test]
+fn distinct_factors_keep_their_order() {
+    let v = |name: &str, i: &str| Tensor::new(name, vec![index(i, 0)]);
+    let ab = Tensor::product(&[v("A", "b"), v("B", "a")]).unwrap();
+    assert_eq!(canon(&ab), (1, "A_b B_a".into()));
+    let aa = Tensor::product(&[v("A", "b"), v("A", "a")]).unwrap();
+    assert_eq!(canon(&aa), (1, "A_a A_b".into()));
+}
+
+#[test]
+fn product_multiplies_coefficients_and_nests() {
+    let mut a = Tensor::with_coefficient("A", vec![index("a", 0)], 2);
+    a.set_metric("", Metric::Symmetric);
+    let b = Tensor::with_coefficient("B", vec![index("^a", 0)], -3);
+    let ab = Tensor::product(&[a.clone(), b.clone()]).unwrap();
+    let abab = Tensor::product(&[ab.clone(), ab]).unwrap();
+    assert_eq!(abab.coefficient(), 36);
+    assert_eq!(abab.to_string(), "36A_a B^a A_a B^a");
+
+    let mut anti = b;
+    anti.set_metric("", Metric::Antisymmetric);
+    assert!(Tensor::product(&[a, anti]).is_err());
 }

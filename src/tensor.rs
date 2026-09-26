@@ -2,7 +2,7 @@
 
 use crate::canonicalization::{canonicalize, canonicalize_in, SlotGroup};
 use crate::dummy::{classify, Metric};
-use crate::error::{validate_permutation, Result};
+use crate::error::{validate_permutation, ButlerPortugalError, Result};
 use crate::index::{IndexKind, TensorIndex};
 use crate::permutation::identity;
 use crate::symmetry::Symmetry;
@@ -17,6 +17,7 @@ pub struct Tensor {
     indices: Vec<TensorIndex>,
     symmetries: Vec<Symmetry>,
     metrics: BTreeMap<String, Metric>,
+    factors: Vec<(String, usize)>,
     coefficient: i32,
 }
 
@@ -42,7 +43,110 @@ impl Tensor {
             indices,
             symmetries: Vec::new(),
             metrics: BTreeMap::new(),
+            factors: Vec::new(),
             coefficient,
+        }
+    }
+
+    /// The product of `factors` as one tensor. Indices are concatenated in
+    /// factor order, each factor keeps its symmetries on its own slots, and
+    /// identical factors (same name, rank and symmetries) commute.
+    /// Coefficients multiply and metrics merge. Conflicting metrics for one
+    /// index type are an error.
+    ///
+    /// ```rust
+    /// use butler_portugal::{canonicalize, Symmetry, Tensor, TensorIndex};
+    ///
+    /// let f = |a: TensorIndex, b: TensorIndex| {
+    ///     let mut t = Tensor::new("F", vec![a, b]);
+    ///     t.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
+    ///     t
+    /// };
+    /// let ff = Tensor::product(&[
+    ///     f(TensorIndex::covariant("b", 0), TensorIndex::covariant("a", 1)),
+    ///     f(TensorIndex::contravariant("a", 0), TensorIndex::contravariant("b", 1)),
+    /// ])?;
+    /// assert_eq!(ff.to_string(), "F_b_a F^a^b");
+    /// assert_eq!(canonicalize(&ff)?.to_string(), "-F_a_b F^a^b");
+    /// # Ok::<(), butler_portugal::ButlerPortugalError>(())
+    /// ```
+    pub fn product(factors: &[Tensor]) -> Result<Self> {
+        let rank: usize = factors.iter().map(Tensor::rank).sum();
+        let mut product = Self::new("", Vec::with_capacity(rank));
+        let mut offsets = Vec::with_capacity(factors.len());
+        for (i, factor) in factors.iter().enumerate() {
+            let offset = product.indices.len();
+            offsets.push(offset);
+            let embed = |p: &[usize]| {
+                let mut q = identity(rank);
+                for (slot, &image) in p.iter().enumerate() {
+                    q[offset + slot] = offset + image;
+                }
+                q
+            };
+            let (perms, signs): (Vec<_>, Vec<_>) = factor
+                .symmetries
+                .iter()
+                .map(|s| s.generators(factor.rank()))
+                .collect::<Result<Vec<_>>>()?
+                .into_iter()
+                .flatten()
+                .map(|(p, sign)| (embed(&p), sign))
+                .unzip();
+            if !perms.is_empty() {
+                product.add_symmetry(Symmetry::custom(perms, signs));
+            }
+            if let Some(j) = factors[..i].iter().position(|g| g.commutes_with(factor)) {
+                let mut swap = identity(rank);
+                for slot in 0..factor.rank() {
+                    swap.swap(offsets[j] + slot, offset + slot);
+                }
+                product.add_symmetry(Symmetry::custom(vec![swap], vec![1]));
+            }
+            for (index_type, &metric) in &factor.metrics {
+                match product.metrics.entry(index_type.clone()) {
+                    Entry::Vacant(e) => {
+                        e.insert(metric);
+                    }
+                    Entry::Occupied(e) if *e.get() != metric => {
+                        return Err(ButlerPortugalError::IncompatibleTensors(format!(
+                            "conflicting metrics for index type {index_type:?}"
+                        )));
+                    }
+                    Entry::Occupied(_) => {}
+                }
+            }
+            product.indices.extend(
+                factor
+                    .indices
+                    .iter()
+                    .enumerate()
+                    .map(|(k, index)| index.with_position(offset + k)),
+            );
+            product.factors.extend(factor.segments());
+            product.coefficient *= factor.coefficient;
+        }
+        product.name = product
+            .factors
+            .iter()
+            .map(|(n, _)| n.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        Ok(product)
+    }
+
+    fn commutes_with(&self, other: &Tensor) -> bool {
+        self.name == other.name
+            && self.rank() == other.rank()
+            && self.symmetries == other.symmetries
+            && self.factors == other.factors
+    }
+
+    fn segments(&self) -> Vec<(String, usize)> {
+        if self.factors.is_empty() {
+            vec![(self.name.clone(), self.rank())]
+        } else {
+            self.factors.clone()
         }
     }
 
@@ -241,9 +345,15 @@ impl fmt::Display for Tensor {
         if self.coefficient.abs() != 1 {
             write!(f, "{}", self.coefficient.abs())?;
         }
-        write!(f, "{}", self.name)?;
-        for index in &self.indices {
-            write!(f, "{index}")?;
+        let mut indices = self.indices.iter();
+        for (k, (name, rank)) in self.segments().iter().enumerate() {
+            if k > 0 {
+                write!(f, " ")?;
+            }
+            write!(f, "{name}")?;
+            for index in indices.by_ref().take(*rank) {
+                write!(f, "{index}")?;
+            }
         }
         Ok(())
     }

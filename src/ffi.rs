@@ -8,6 +8,7 @@ use std::os::raw::c_char;
 use std::ptr;
 
 use crate::canonicalization::canonicalize;
+use crate::dummy::Metric;
 use crate::index::TensorIndex;
 use crate::symmetry::Symmetry;
 use crate::tensor::Tensor;
@@ -33,6 +34,41 @@ pub enum BPResult {
     CanonicalizationError = 3,
     /// Memory allocation failed
     AllocationError = 4,
+}
+
+/// Metric of an index type, deciding whether contracted pairs may swap ends.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BPMetric {
+    /// Raising and lowering is free
+    Symmetric = 0,
+    /// Raising and lowering flips the sign
+    Antisymmetric = 1,
+    /// No metric, contraction ends are fixed
+    Absent = 2,
+}
+
+fn metric_from_c(metric: i32) -> Option<Metric> {
+    match metric {
+        m if m == BPMetric::Symmetric as i32 => Some(Metric::Symmetric),
+        m if m == BPMetric::Antisymmetric as i32 => Some(Metric::Antisymmetric),
+        m if m == BPMetric::Absent as i32 => Some(Metric::Absent),
+        _ => None,
+    }
+}
+
+unsafe fn c_str<'a>(s: *const c_char) -> Option<&'a str> {
+    if s.is_null() {
+        None
+    } else {
+        CStr::from_ptr(s).to_str().ok()
+    }
+}
+
+unsafe fn set_error(error_out: *mut BPResult, result: BPResult) {
+    if !error_out.is_null() {
+        *error_out = result;
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -72,6 +108,27 @@ pub unsafe extern "C" fn bp_index_contravariant(
         return ptr::null_mut();
     };
     Box::into_raw(Box::new(TensorIndex::contravariant(name_str, position)))
+}
+
+/// Set the index type of an index. Indices only contract within one type and
+/// each type has its own metric. The default type is the empty string.
+///
+/// # Safety
+/// - `index` must be a valid non-null handle.
+/// - `index_type` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn bp_index_set_type(
+    index: TensorIndexHandle,
+    index_type: *const c_char,
+) -> BPResult {
+    if index.is_null() || index_type.is_null() {
+        return BPResult::NullPointer;
+    }
+    let Some(index_type) = c_str(index_type) else {
+        return BPResult::InvalidArgument;
+    };
+    *index = (*index).clone().of_type(index_type);
+    BPResult::Success
 }
 
 /// Free a tensor index.
@@ -184,6 +241,33 @@ pub unsafe extern "C" fn bp_symmetry_cyclic(indices: *const usize, len: usize) -
         Vec::new()
     };
     Box::into_raw(Box::new(Symmetry::cyclic(indices_vec)))
+}
+
+/// Create a symmetry from explicit signed generators. `permutations` holds
+/// `num_generators` permutations of length `rank` back to back, where new slot
+/// `i` takes old slot `p[i]`, and `signs` holds one sign (`1` or `-1`) each.
+///
+/// # Safety
+/// - `permutations` must point to `num_generators * rank` elements.
+/// - `signs` must point to `num_generators` elements.
+/// - The returned handle must be freed with `bp_symmetry_free`.
+#[no_mangle]
+pub unsafe extern "C" fn bp_symmetry_custom(
+    permutations: *const usize,
+    signs: *const i32,
+    num_generators: usize,
+    rank: usize,
+) -> SymmetryHandle {
+    if num_generators > 0 && (permutations.is_null() || signs.is_null()) {
+        return ptr::null_mut();
+    }
+    if num_generators == 0 {
+        return Box::into_raw(Box::new(Symmetry::custom(Vec::new(), Vec::new())));
+    }
+    let flat = std::slice::from_raw_parts(permutations, num_generators * rank);
+    let perms = flat.chunks(rank.max(1)).map(<[usize]>::to_vec).collect();
+    let signs = std::slice::from_raw_parts(signs, num_generators).to_vec();
+    Box::into_raw(Box::new(Symmetry::custom(perms, signs)))
 }
 
 /// Free a symmetry.
@@ -337,6 +421,63 @@ pub unsafe extern "C" fn bp_tensor_add_symmetry(
     }
     (*tensor).add_symmetry((*symmetry).clone());
     BPResult::Success
+}
+
+/// Set the metric of an index type on a tensor. `metric` is a `BPMetric`
+/// value, anything else is `InvalidArgument`.
+///
+/// # Safety
+/// - `tensor` must be a valid non-null handle.
+/// - `index_type` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn bp_tensor_set_metric(
+    tensor: TensorHandle,
+    index_type: *const c_char,
+    metric: i32,
+) -> BPResult {
+    if tensor.is_null() || index_type.is_null() {
+        return BPResult::NullPointer;
+    }
+    let (Some(index_type), Some(metric)) = (c_str(index_type), metric_from_c(metric)) else {
+        return BPResult::InvalidArgument;
+    };
+    (*tensor).set_metric(index_type, metric);
+    BPResult::Success
+}
+
+/// Multiply tensors into one tensor, see `Tensor::product`. Identical factors
+/// commute. Returns null on a null factor or conflicting metrics.
+///
+/// # Safety
+/// - `factors` must point to `num_factors` valid non-null handles.
+/// - The factors are cloned, the caller keeps ownership.
+/// - The returned handle must be freed with `bp_tensor_free`.
+#[no_mangle]
+pub unsafe extern "C" fn bp_tensor_product(
+    factors: *const TensorHandle,
+    num_factors: usize,
+    error_out: *mut BPResult,
+) -> TensorHandle {
+    if factors.is_null() && num_factors > 0 {
+        set_error(error_out, BPResult::NullPointer);
+        return ptr::null_mut();
+    }
+    let handles = if num_factors > 0 {
+        std::slice::from_raw_parts(factors, num_factors)
+    } else {
+        &[]
+    };
+    if handles.iter().any(|h| h.is_null()) {
+        set_error(error_out, BPResult::NullPointer);
+        return ptr::null_mut();
+    }
+    let owned: Vec<Tensor> = handles.iter().map(|&h| (*h).clone()).collect();
+    let Ok(product) = Tensor::product(&owned) else {
+        set_error(error_out, BPResult::InvalidArgument);
+        return ptr::null_mut();
+    };
+    set_error(error_out, BPResult::Success);
+    Box::into_raw(Box::new(product))
 }
 
 /// Get the rank (number of indices) of a tensor.
@@ -503,6 +644,62 @@ mod tests {
             bp_tensor_free(tensor);
             bp_index_free(idx_a);
             bp_index_free(idx_b);
+        }
+    }
+
+    #[test]
+    fn test_ffi_dummies_and_products() {
+        unsafe {
+            let name = |s: &str| CString::new(s).expect("CString::new failed");
+            let (a, b, t, f, spin) = (name("a"), name("b"), name("t"), name("F"), name("spin"));
+            let lower = [bp_index_new(b.as_ptr(), 0), bp_index_new(a.as_ptr(), 1)];
+            let upper = [
+                bp_index_contravariant(a.as_ptr(), 0),
+                bp_index_contravariant(b.as_ptr(), 1),
+            ];
+            for &i in lower.iter().chain(&upper) {
+                assert!(matches!(
+                    bp_index_set_type(i, spin.as_ptr()),
+                    BPResult::Success
+                ));
+            }
+            let swap: [usize; 2] = [1, 0];
+            let anti = bp_symmetry_custom(swap.as_ptr(), [-1].as_ptr(), 1, 2);
+            let f_lower = bp_tensor_new(f.as_ptr(), lower.as_ptr(), 2);
+            let f_upper = bp_tensor_new(f.as_ptr(), upper.as_ptr(), 2);
+            for &x in &[f_lower, f_upper] {
+                assert!(matches!(bp_tensor_add_symmetry(x, anti), BPResult::Success));
+                assert!(matches!(
+                    bp_tensor_set_metric(x, spin.as_ptr(), 1),
+                    BPResult::Success
+                ));
+            }
+            assert!(matches!(
+                bp_tensor_set_metric(f_lower, t.as_ptr(), 7),
+                BPResult::InvalidArgument
+            ));
+
+            let mut error = BPResult::NullPointer;
+            let product = bp_tensor_product([f_lower, f_upper].as_ptr(), 2, &mut error);
+            assert!(matches!(error, BPResult::Success));
+            let canonical = bp_canonicalize(product, &mut error);
+            let s = bp_tensor_to_string(canonical);
+            assert_eq!(CStr::from_ptr(s).to_str(), Ok("-F_a_b F^a^b"));
+
+            assert!(
+                bp_tensor_product([f_lower, ptr::null_mut()].as_ptr(), 2, &mut error).is_null()
+            );
+            assert!(matches!(error, BPResult::NullPointer));
+
+            bp_string_free(s);
+            bp_tensor_free(canonical);
+            bp_tensor_free(product);
+            bp_tensor_free(f_lower);
+            bp_tensor_free(f_upper);
+            bp_symmetry_free(anti);
+            for i in lower.into_iter().chain(upper) {
+                bp_index_free(i);
+            }
         }
     }
 

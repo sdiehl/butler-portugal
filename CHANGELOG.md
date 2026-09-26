@@ -19,6 +19,13 @@ Full Butler-Portugal algorithm with dummy indices.
 - Brute-force double coset check over small groups.
 - Riemann tests for Ricci, Kretschmann, and Bianchi identities.
 - README trimmed to one example and doctested.
+- `Tensor::product` builds commuting products of tensors.
+- Identical product factors exchange with sign.
+- Products display factor by factor, like `F_a_b F^a^b`.
+- C API: `bp_tensor_product`, `bp_tensor_set_metric`, `bp_index_set_type`.
+- C API: `bp_symmetry_custom` from signed generator lists.
+- Python bindings over the C API with ctypes.
+- Matches xPerm on Riemann monomials, and runs faster.
 - Minimum Rust version is now 1.97.
 
 ## 0.3.0 (2026-09-26)
