@@ -1,13 +1,10 @@
 [package]
 name = "butler-portugal"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Stephen Diehl"]
 categories = ["science", "mathematics"]
 documentation = "https://docs.rs/butler-portugal"
 edition = "2021"
-exclude = [
-  ".github/**/*",
-]
 homepage = "https://github.com/sdiehl/butler-portugal"
 include = [
   "src/**/*",
@@ -22,7 +19,7 @@ keywords = ["physics", "tensor", "canonicalization", "symmetry", "relativity"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/sdiehl/butler-portugal"
-rust-version = "1.70.0"
+rust-version = "1.97"
 description = "A Rust library implementing the Butler-Portugal algorithm for tensor canonicalization"
 
 [dependencies]

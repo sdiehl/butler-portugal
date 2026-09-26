@@ -1,8 +1,9 @@
 //! Tensors with named indices, slot symmetries, and an integer coefficient.
 
 use crate::canonicalization::{canonicalize, canonicalize_in, SlotGroup};
+use crate::dummy::{classify, Metric};
 use crate::error::{validate_permutation, Result};
-use crate::index::TensorIndex;
+use crate::index::{IndexKind, TensorIndex};
 use crate::permutation::identity;
 use crate::symmetry::Symmetry;
 use crate::young_tableaux::{young_symmetrizer_permutations, StandardTableau};
@@ -15,6 +16,7 @@ pub struct Tensor {
     name: String,
     indices: Vec<TensorIndex>,
     symmetries: Vec<Symmetry>,
+    metrics: BTreeMap<String, Metric>,
     coefficient: i32,
 }
 
@@ -39,6 +41,7 @@ impl Tensor {
             name: name.to_string(),
             indices,
             symmetries: Vec::new(),
+            metrics: BTreeMap::new(),
             coefficient,
         }
     }
@@ -83,6 +86,26 @@ impl Tensor {
         self.symmetries.clear();
     }
 
+    /// Sets the metric of an index type, which decides whether the ends of
+    /// its contractions can swap. The default index type is `""` and every
+    /// type defaults to [`Metric::Symmetric`].
+    pub fn set_metric(&mut self, index_type: &str, metric: Metric) {
+        self.metrics.insert(index_type.to_string(), metric);
+    }
+
+    /// The metric of an index type.
+    pub fn metric(&self, index_type: &str) -> Metric {
+        self.metrics.get(index_type).copied().unwrap_or_default()
+    }
+
+    /// Classifies each slot as free or as one end of a contraction. A name
+    /// occurring once covariant and once contravariant within an index type
+    /// is a contraction, numbered in order of type and name. A contracted
+    /// name occurring more than twice is an error.
+    pub fn index_kinds(&self) -> Result<Vec<IndexKind>> {
+        classify(&self.indices)
+    }
+
     /// Number of indices.
     pub fn rank(&self) -> usize {
         self.indices.len()
@@ -102,10 +125,8 @@ impl Tensor {
             .map(|(i, &p)| self.indices[p].clone().with_position(i))
             .collect();
         Self {
-            name: self.name.clone(),
             indices,
-            symmetries: self.symmetries.clone(),
-            coefficient: self.coefficient,
+            ..self.clone()
         }
     }
 
@@ -187,10 +208,10 @@ impl Tensor {
         #[cfg(feature = "parallel")]
         let canonical: Vec<Tensor> = {
             use rayon::prelude::*;
-            perms.par_iter().map(term).collect()
+            perms.par_iter().map(term).collect::<Result<_>>()?
         };
         #[cfg(not(feature = "parallel"))]
-        let canonical: Vec<Tensor> = perms.iter().map(term).collect();
+        let canonical: Vec<Tensor> = perms.iter().map(term).collect::<Result<_>>()?;
         let mut terms: BTreeMap<Vec<(String, bool)>, Tensor> = BTreeMap::new();
         for term in canonical.into_iter().filter(|t| t.coefficient != 0) {
             let key = term

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.0 (2026-09-26)
+
+Full Butler-Portugal algorithm with dummy indices.
+
+- Double coset search canonicalizes contracted dummy indices.
+- Dummies are renamed to the sorted dummy names.
+- `IndexKind` classifies indices as free or dummy.
+- Repeated names with opposite variance pair automatically.
+- Names used more than twice are errors.
+- `TensorIndex::of_type` separates index types for pairing.
+- `Metric` per index type: symmetric, antisymmetric, or absent.
+- Antisymmetric metric gives a sign on raise and lower.
+- Public `DummyGroup` with generators, pairs, and order.
+- Free only tensors keep the fast slot path.
+- Tensors vanishing under dummy renaming return zero.
+- Reference corpus of one thousand canonical forms.
+- Brute-force double coset check over small groups.
+- Riemann tests for Ricci, Kretschmann, and Bianchi identities.
+- README trimmed to one example and doctested.
+- Minimum Rust version is now 1.97.
+
 ## 0.3.0 (2026-09-26)
 
 Finish Schreier-Sims. Canonicalization now runs on a signed permutation group.

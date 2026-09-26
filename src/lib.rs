@@ -1,10 +1,11 @@
 //! # Butler-Portugal Tensor Canonicalization Library
 //!
-//! Brings tensors with slot symmetries into a canonical form: the
-//! lexicographically smallest index arrangement reachable by the symmetries,
-//! with the accumulated sign folded into the coefficient. The symmetries are
-//! handled as a signed permutation group through the Schreier-Sims algorithm,
-//! so large symmetry groups never need to be enumerated.
+//! Brings tensors into a canonical form: the lexicographically smallest index
+//! arrangement reachable by the slot symmetries and by renaming contracted
+//! (dummy) indices, with the accumulated sign folded into the coefficient.
+//! The symmetries are handled as signed permutation groups through the
+//! Schreier-Sims algorithm, and dummies through the Butler-Portugal double
+//! coset search, so large symmetry groups never need to be enumerated.
 //!
 //! ## Example
 //! ```rust
@@ -31,6 +32,7 @@
 //! ```
 
 pub mod canonicalization;
+pub mod dummy;
 pub mod error;
 pub mod ffi;
 pub mod index;
@@ -41,7 +43,12 @@ pub mod tensor;
 pub mod young_tableaux;
 
 pub use canonicalization::{canonicalize, SlotGroup};
+pub use dummy::{DummyGroup, Metric};
 pub use error::{ButlerPortugalError, Result};
-pub use index::TensorIndex;
+pub use index::{IndexKind, TensorIndex};
 pub use symmetry::Symmetry;
 pub use tensor::Tensor;
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

@@ -11,9 +11,11 @@
 //! slot at a time, keeping every partial product that achieves the minimum so
 //! far. Only repeated index names cause branching.
 //!
-//! Dummy (contracted) index renaming is not modelled. Only slot symmetries are
-//! applied.
+//! Tensors with contracted indices take the double coset path in
+//! [`crate::dummy`], which also renames dummies. Tensors whose indices are all
+//! free keep the slot-only walk above.
 
+use crate::dummy::{double_coset_rep, Labels};
 use crate::error::{ButlerPortugalError, Result};
 use crate::index::TensorIndex;
 use crate::permutation::{compose, identity, is_identity, Permutation};
@@ -89,7 +91,7 @@ impl SlotGroup {
                 tensor.rank()
             )));
         }
-        Ok(canonicalize_in(tensor, self))
+        canonicalize_in(tensor, self)
     }
 
     /// Every signed slot permutation in the group.
@@ -101,7 +103,10 @@ impl SlotGroup {
     /// `indices`, with its sign. Returns `None` if the arrangement is reached
     /// with both signs, which means the tensor vanishes.
     pub fn minimal(&self, indices: &[TensorIndex]) -> Option<(Permutation, i32)> {
-        let key = |slot: usize| (indices[slot].name(), indices[slot].is_contravariant());
+        let key = |slot: usize| {
+            let index = &indices[slot];
+            (index.index_type(), index.name(), index.is_contravariant())
+        };
         let mut partial = vec![identity(self.rank + 2)];
         for (slot, level) in self.bsgs.levels().iter().enumerate().take(self.rank) {
             let mut best = None;
@@ -131,7 +136,7 @@ impl SlotGroup {
 }
 
 /// Encodes a signed permutation of `n` points as a permutation of `n + 2` points.
-fn signed(perm: &[usize], sign: i32) -> Permutation {
+pub(crate) fn signed(perm: &[usize], sign: i32) -> Permutation {
     let n = perm.len();
     let mut p = perm.to_vec();
     if sign == 1 {
@@ -152,9 +157,12 @@ fn unsigned(perm: &[usize]) -> (Permutation, i32) {
 /// Brings a tensor into canonical form.
 ///
 /// The result has the lexicographically smallest index arrangement reachable
-/// by the tensor's slot symmetries, ordered by index name and then variance
-/// with covariant first, and its coefficient carries the accumulated sign.
-/// A tensor that vanishes by symmetry comes back with coefficient `0`.
+/// by the tensor's slot symmetries and by renaming its contracted indices.
+/// Free indices come first, ordered by type, name, and then variance with
+/// covariant first. A name appearing once covariant and once contravariant is
+/// a contraction, and contractions are renamed to the sorted dummy names in
+/// order of appearance. The coefficient carries the accumulated sign, and a
+/// tensor that vanishes by symmetry comes back with coefficient `0`.
 ///
 /// ```rust
 /// use butler_portugal::{canonicalize, Symmetry, Tensor, TensorIndex};
@@ -176,29 +184,62 @@ fn unsigned(perm: &[usize]) -> (Permutation, i32) {
 /// assert_eq!(canonical.to_string(), "R_a_b_c_d");
 /// # Ok::<(), butler_portugal::ButlerPortugalError>(())
 /// ```
+///
+/// Contracted indices are renamed, so the Ricci contraction written with
+/// either name comes out the same:
+///
+/// ```rust
+/// use butler_portugal::{canonicalize, Symmetry, Tensor, TensorIndex};
+///
+/// let ricci = |d: &str| {
+///     let mut r = Tensor::new(
+///         "R",
+///         vec![
+///             TensorIndex::contravariant(d, 0),
+///             TensorIndex::covariant("b", 1),
+///             TensorIndex::covariant(d, 2),
+///             TensorIndex::covariant("c", 3),
+///         ],
+///     );
+///     r.add_symmetry(Symmetry::antisymmetric(vec![0, 1]));
+///     r.add_symmetry(Symmetry::antisymmetric(vec![2, 3]));
+///     r.add_symmetry(Symmetry::symmetric_pairs(vec![(0, 1), (2, 3)]));
+///     r
+/// };
+/// assert_eq!(canonicalize(&ricci("a"))?.to_string(), "R_b_a_c^a");
+/// assert_eq!(canonicalize(&ricci("z"))?.to_string(), "R_b_z_c^z");
+/// # Ok::<(), butler_portugal::ButlerPortugalError>(())
+/// ```
 pub fn canonicalize(tensor: &Tensor) -> Result<Tensor> {
     let group = SlotGroup::new(tensor)?;
-    Ok(canonicalize_in(tensor, &group))
+    canonicalize_in(tensor, &group)
 }
 
 /// Canonicalizes `tensor` using an already computed slot group.
-pub(crate) fn canonicalize_in(tensor: &Tensor, group: &SlotGroup) -> Tensor {
-    let zero = || {
-        let mut t = tensor.clone();
-        t.set_coefficient(0);
-        t
-    };
+pub(crate) fn canonicalize_in(tensor: &Tensor, group: &SlotGroup) -> Result<Tensor> {
+    let labels = Labels::new(tensor)?;
+    let mut t = tensor.clone();
     if tensor.coefficient() == 0 || group.is_zero() {
-        return zero();
+        t.set_coefficient(0);
+        return Ok(t);
     }
-    match group.minimal(tensor.indices()) {
-        Some((perm, sign)) => {
-            let mut t = tensor.reorder(&perm);
-            t.set_coefficient(t.coefficient() * sign);
-            t
-        }
-        None => zero(),
-    }
+    let found = if labels.has_dummies() {
+        double_coset_rep(group, &labels).map(|(h, sign)| {
+            *t.indices_mut() = h
+                .iter()
+                .enumerate()
+                .map(|(i, &label)| labels.names[label].with_position(i))
+                .collect();
+            sign
+        })
+    } else {
+        group.minimal(tensor.indices()).map(|(perm, sign)| {
+            t = tensor.reorder(&perm);
+            sign
+        })
+    };
+    t.set_coefficient(found.map_or(0, |sign| t.coefficient() * sign));
+    Ok(t)
 }
 
 #[cfg(test)]

@@ -14,6 +14,17 @@ pub struct TensorIndex {
     position: usize,
     /// Whether the index is contravariant (true) or covariant (false)
     contravariant: bool,
+    /// The index type, such as a spacetime or spinor index. Empty by default.
+    index_type: String,
+}
+
+/// How an index takes part in a tensor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IndexKind {
+    /// Appears once, or repeated with a single variance.
+    Free,
+    /// One end of a contraction, carrying the pair's id.
+    Dummy(usize),
 }
 
 impl TensorIndex {
@@ -33,7 +44,8 @@ impl TensorIndex {
         Self {
             name: name.to_string(),
             position,
-            contravariant: false, // Default to covariant
+            contravariant: false,
+            index_type: String::new(),
         }
     }
 
@@ -47,6 +59,7 @@ impl TensorIndex {
             name: name.to_string(),
             position,
             contravariant: true,
+            index_type: String::new(),
         }
     }
 
@@ -60,7 +73,27 @@ impl TensorIndex {
             name: name.to_string(),
             position,
             contravariant: false,
+            index_type: String::new(),
         }
+    }
+
+    /// Returns a copy of this index with the given index type. Indices of
+    /// different types never contract, and each type has its own metric.
+    ///
+    /// ```rust
+    /// use butler_portugal::TensorIndex;
+    ///
+    /// let spinor = TensorIndex::new("A", 0).of_type("spinor");
+    /// assert_eq!(spinor.index_type(), "spinor");
+    /// ```
+    pub fn of_type(mut self, index_type: &str) -> Self {
+        self.index_type = index_type.to_string();
+        self
+    }
+
+    /// The index type.
+    pub fn index_type(&self) -> &str {
+        &self.index_type
     }
 
     /// Returns the name of the index
@@ -97,37 +130,39 @@ impl TensorIndex {
     pub fn with_name(&self, name: &str) -> Self {
         Self {
             name: name.to_string(),
-            position: self.position,
-            contravariant: self.contravariant,
+            ..self.clone()
         }
     }
 
     /// Creates a copy with a new position
     pub fn with_position(&self, position: usize) -> Self {
         Self {
-            name: self.name.clone(),
             position,
-            contravariant: self.contravariant,
+            ..self.clone()
         }
     }
 
-    /// Checks if two indices can be contracted (same name, different variance)
+    /// Checks if two indices can be contracted: same type and name, opposite variance.
     pub fn can_contract_with(&self, other: &TensorIndex) -> bool {
-        self.name == other.name && self.contravariant != other.contravariant
+        self.index_type == other.index_type
+            && self.name == other.name
+            && self.contravariant != other.contravariant
     }
 
-    /// Compares indices for canonical ordering
-    /// Orders by: name (alphabetically), then by variance (covariant first), then by position
+    /// Canonical ordering: type, then name, then covariant before
+    /// contravariant, then position.
     pub fn canonical_cmp(&self, other: &TensorIndex) -> std::cmp::Ordering {
-        use std::cmp::Ordering;
+        self.label_cmp(other)
+            .then(self.position.cmp(&other.position))
+    }
 
-        match self.name.cmp(&other.name) {
-            Ordering::Equal => match self.contravariant.cmp(&other.contravariant) {
-                Ordering::Equal => self.position.cmp(&other.position),
-                other => other,
-            },
-            other => other,
-        }
+    /// Ordering ignoring position: type, then name, then variance.
+    pub(crate) fn label_cmp(&self, other: &TensorIndex) -> std::cmp::Ordering {
+        (&self.index_type, &self.name, self.contravariant).cmp(&(
+            &other.index_type,
+            &other.name,
+            other.contravariant,
+        ))
     }
 }
 
