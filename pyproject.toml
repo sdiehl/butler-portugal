@@ -24,4 +24,5 @@ environment = { PATH = "$HOME/.cargo/bin:$PATH" }
 
 [tool.cibuildwheel.macos]
 archs = ["x86_64", "arm64"]
+environment = { MACOSX_DEPLOYMENT_TARGET = "10.12" }
 before-all = "rustup target add x86_64-apple-darwin aarch64-apple-darwin"
